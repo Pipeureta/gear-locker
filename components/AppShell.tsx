@@ -1,0 +1,143 @@
+'use client';
+
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import { useEffect, useState } from 'react';
+import { useCurrentPlayer, useStore } from '@/lib/store';
+import LoginScreen from '@/components/LoginScreen';
+import ProfileEditor from '@/components/ProfileEditor';
+
+interface NavEntry {
+  href: string;
+  label: string;
+  ico: string;
+  group: 'Operaciones' | 'Equipo' | 'Admin';
+  adminOnly?: boolean;
+}
+
+const NAV: NavEntry[] = [
+  { href: '/', label: 'HQ', ico: '◈', group: 'Operaciones' },
+  { href: '/eventos', label: 'Eventos', ico: '◎', group: 'Operaciones' },
+  { href: '/roster', label: 'Roster', ico: '▣', group: 'Equipo' },
+  { href: '/cuotas', label: 'Cuotas', ico: '◫', group: 'Equipo' },
+  { href: '/comandancia', label: 'Comandancia', ico: '✦', group: 'Admin', adminOnly: true },
+];
+
+const GROUPS: NavEntry['group'][] = ['Operaciones', 'Equipo', 'Admin'];
+
+function isActive(pathname: string, href: string): boolean {
+  if (href === '/') return pathname === '/';
+  return pathname.startsWith(href);
+}
+
+export default function AppShell({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+  const player = useCurrentPlayer();
+  const { adminView, setAdminView, sessionPlayerId, logout } = useStore();
+  const [profileOpen, setProfileOpen] = useState(false);
+
+  // Registro del service worker para modo PWA/offline.
+  useEffect(() => {
+    if ('serviceWorker' in navigator && process.env.NODE_ENV === 'production') {
+      navigator.serviceWorker.register('/sw.js').catch(() => {});
+    }
+  }, []);
+
+  if (!sessionPlayerId || player.id === '__none__') {
+    return <LoginScreen />;
+  }
+
+  const visibleNav = NAV.filter((n) => !n.adminOnly || player.isAdmin);
+  const current = visibleNav.find((n) => isActive(pathname, n.href));
+
+  return (
+    <div className="lat-grid-bg">
+      <div className="shell">
+        <aside className="sidebar">
+          <div className="sidebar-header">
+            <span className="brand-title">◈ Gear Locker</span>
+            <span className="brand-sub">Team Six Devgru</span>
+          </div>
+          <nav className="sidebar-nav">
+            {GROUPS.map((group) => {
+              const items = visibleNav.filter((n) => n.group === group);
+              if (items.length === 0) return null;
+              return (
+                <div key={group}>
+                  <div className="sidebar-group-label">{group}</div>
+                  {items.map((n) => (
+                    <Link
+                      key={n.href}
+                      href={n.href}
+                      className={`nav-item${isActive(pathname, n.href) ? ' active' : ''}`}
+                    >
+                      <span className="nav-ico">{n.ico}</span> {n.label}
+                    </Link>
+                  ))}
+                </div>
+              );
+            })}
+          </nav>
+          <div className="sidebar-footer">
+            <button
+              className="row profile-btn"
+              onClick={() => setProfileOpen(true)}
+              title="Ver y editar mi perfil"
+            >
+              <span className="avatar sm">
+                {player.photoUrl ? <img src={player.photoUrl} alt={player.callsign} /> : player.callsign}
+              </span>
+              <span style={{ textAlign: 'left' }}>
+                <span className="small acc" style={{ display: 'block' }}>{(player.nickname || player.name).toUpperCase()}</span>
+                <span className="tiny dim-t">{player.callsign} · Mi perfil ✎</span>
+              </span>
+            </button>
+            {player.isAdmin && (
+              <button
+                className={`lat-btn sm ${adminView ? 'active-warn' : 'ghost'}`}
+                onClick={() => setAdminView(!adminView)}
+                title="Alterna entre vista integrante y vista comandancia"
+              >
+                {adminView ? '✦ Vista admin ON' : 'Vista admin OFF'}
+              </button>
+            )}
+            <button className="lat-btn ghost sm" onClick={logout}>⏻ Cerrar sesión</button>
+          </div>
+        </aside>
+
+        <div className="main">
+          <header className="topbar">
+            <div className="page-title">
+              <span className="crumb">TSD /</span> {current?.label ?? 'Briefing'}
+            </div>
+            <div className="row">
+              <span className="lat-chip ok" title="Los datos se guardan en este dispositivo hasta conectar Supabase">
+                <span className="dot" /> Demo
+              </span>
+              <button
+                className="avatar sm avatar-btn"
+                onClick={() => setProfileOpen(true)}
+                title="Mi perfil"
+              >
+                {player.photoUrl ? <img src={player.photoUrl} alt={player.callsign} /> : player.callsign}
+              </button>
+              <button className="lat-btn ghost sm mobile-only" onClick={logout} title="Cerrar sesión">⏻</button>
+            </div>
+          </header>
+          <div className="content">{children}</div>
+        </div>
+      </div>
+
+      <nav className="bottom-tabs">
+        {visibleNav.map((n) => (
+          <Link key={n.href} href={n.href} className={`tab${isActive(pathname, n.href) ? ' active' : ''}`}>
+            <span className="nav-ico">{n.ico}</span>
+            {n.label}
+          </Link>
+        ))}
+      </nav>
+
+      {profileOpen && <ProfileEditor onClose={() => setProfileOpen(false)} />}
+    </div>
+  );
+}

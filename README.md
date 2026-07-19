@@ -1,36 +1,62 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# ◈ Gear Locker — Team Six Devgru (TSD)
 
-## Getting Started
+Hub de operaciones del equipo de airsoft **Team Six Devgru**, enfocado en MILSIM. PWA instalable en desktop y mobile, estética "tactical C2" (portada del design system Lattice de OpenMANET).
 
-First, run the development server:
+## Estado actual: modo demo con datos reales del equipo
+
+`lib/data.ts` carga la nómina TSD, las cuotas 2026 (ene–jul, $10.000/mes) y el inventario desde la planilla `TEAM SIX DEVGRU.xlsx` (hojas "2026", "Inventario" y "Cotizaciones"). Los **eventos siguen siendo de ejemplo** y los roles habituales de cada integrante son provisionales. RSVP y vista admin persisten en `localStorage`:
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+# http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Secciones
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Al abrir la app hay **pantalla de ingreso** con callsign, nickname o nombre y contraseña. En demo, las fichas precargadas usan la clave temporal `TSD2026!`; las cuentas nuevas eligen su contraseña al registrarse. El **registro** exige nombre, callsign, teléfono y contraseña; nickname y foto son opcionales. Si el callsign ya pertenece a una ficha de la nómina, la aprobación vincula la cuenta a esa ficha sin duplicarla; si no existe, crea un integrante nuevo. Cada integrante puede cambiar su contraseña desde el perfil o solicitar a Comandancia un restablecimiento aprobado.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Ruta | Qué hay |
+|---|---|
+| `/` (HQ) | Widgets: mi cuota, mi asistencia, mi próximo rol, avisos publicados por comandancia, próximos eventos |
+| `/eventos` | Lista con RSVP (voy / tal vez / no voy), link externo, historial de asistencia |
+| `/eventos/[id]` | **Briefing Room**: datos de la operación, límites FPS, recordatorios, mapas y archivos, plan de comunicaciones (SOI), ORBAT por squad, roster de confirmados, botón Google Maps |
+| `/roster` | Jugadores con foto/avatar, rango, rol habitual, % asistencia y loadout |
+| `/cuotas` | Datos bancarios para transferir (con botones Copiar), subir comprobante, historial de pagos |
+| `/comandancia` → Inventario | Equipo editable del team, responsables, cantidades, notas y cotizaciones |
+| `/comandancia` | Solo admin: publicar avisos al feed, aprobar/rechazar solicitudes de ingreso, revisar comprobantes (aceptar = marca la cuota pagada), agregar/editar/eliminar integrantes, matriz de cuotas clickeable, asistencia, notas privadas, checklist pre-evento |
 
-## Learn More
+El botón **"Vista admin"** (abajo en el sidebar) alterna la vista comandancia — en producción esto lo decide `players.is_admin`.
 
-To learn more about Next.js, take a look at the following resources:
+## PWA
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- `app/manifest.ts` + `public/sw.js` + íconos en `public/`.
+- El service worker se registra solo en producción (`npm run build && npm start`).
+- Cachea navegación y assets → los briefings quedan visibles sin señal en cancha.
+- En Chrome/Edge aparece "Instalar app"; en iOS: Compartir → Añadir a pantalla de inicio.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Conectar Supabase (siguiente fase)
 
-## Deploy on Vercel
+1. Ejecutar `supabase/schema.sql` en el SQL Editor del proyecto (crea tablas + RLS con roles jugador/comandancia).
+2. Crear buckets de Storage: `event-files` (privado) y `player-photos` (público) — políticas comentadas al final del schema.
+3. `npm install @supabase/supabase-js @supabase/ssr` y crear `.env.local`:
+   ```
+   NEXT_PUBLIC_SUPABASE_URL=...
+   NEXT_PUBLIC_SUPABASE_ANON_KEY=...
+   ```
+4. Reemplazar la capa demo: `lib/data.ts` define los tipos y helpers — las estructuras calzan 1:1 con las tablas del schema, así que la migración es query por query. `lib/store.tsx` (RSVP + vista admin) se reemplaza por mutaciones a `event_rsvps` y el perfil del usuario autenticado.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Deploy en Vercel
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+# con el repo en GitHub
+vercel link
+vercel --prod
+```
+O importar el repo desde el dashboard de Vercel (framework: Next.js, sin config extra). Agregar las env vars de Supabase cuando se conecte la base.
+
+## Roadmap v2 (propuesto)
+
+- Rangos automáticos por asistencia · After Action Reports con fotos y MVP
+- Armería/préstamos de equipo del team · SOPs y reglas versionadas
+- Pipeline de postulantes · Notificaciones push (recordatorio evento / cuota vencida)
