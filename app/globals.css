@@ -564,7 +564,7 @@ a { color: inherit; }
   align-items: center;
 }
 .roster-card .rc-name { font-size: 12.6px; color: var(--text); letter-spacing: 0.06em; font-weight: 700; }
-.roster-card .rc-sub { font-size: 10.5px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-top: 2px; }
+.roster-card .rc-sub { display: block; font-size: 10.5px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-top: 2px; }
 
 .squad-block { border: 1px solid var(--border); }
 .squad-block .squad-head {

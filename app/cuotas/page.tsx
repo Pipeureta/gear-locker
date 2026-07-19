@@ -95,7 +95,7 @@ export default function CuotasPage() {
         <div className="lat-panel">
           <div className="panel-head"><h3>Paso a paso</h3></div>
           <span className="help">
-            1. Transfiere a la cuenta de al lado (usa los botones Copiar).<br />
+            1. Transfiere usando los datos de abajo (con los botones Copiar).<br />
             2. Envía el comprobante al correo con el asunto indicado.<br />
             3. Adjunta el comprobante aquí abajo para dejar respaldo en la app.<br />
             4. {PAYMENT_INFO.note}
