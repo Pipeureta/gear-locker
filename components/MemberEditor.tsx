@@ -3,6 +3,7 @@
 // Modal de comandancia para crear o editar la ficha de un integrante.
 
 import { useRef, useState } from 'react';
+import ModalShell from '@/components/ModalShell';
 import { ROLES, rolesForPlayer, type Player, type Rank, type MemberStatus, type Role } from '@/lib/data';
 import { imageToDataUrl } from '@/lib/img';
 
@@ -65,8 +66,7 @@ export default function MemberEditor({
   };
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
+    <ModalShell onClose={onClose}>
         <h2>{initial ? `Editar — ${initial.callsign} ${initial.name}` : 'Agregar integrante'}</h2>
 
         <div className="photo-pick">
@@ -148,7 +148,6 @@ export default function MemberEditor({
           <button className="lat-btn ghost" onClick={onClose}>Cancelar</button>
           <button className="lat-btn primary" onClick={save}>Guardar</button>
         </div>
-      </div>
-    </div>
+    </ModalShell>
   );
 }

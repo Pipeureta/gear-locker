@@ -1,6 +1,7 @@
 'use client';
 
 import { use, useRef, useState } from 'react';
+import ModalShell from '@/components/ModalShell';
 import Link from 'next/link';
 import { daysUntil, fmtDate, rolesForPlayer, type RsvpStatus } from '@/lib/data';
 import { useCurrentPlayer, useStore } from '@/lib/store';
@@ -345,15 +346,13 @@ export default function BriefingPage({ params }: { params: Promise<{ id: string 
       </div>
 
       {lightbox && (
-        <div className="modal-overlay" onClick={() => setLightbox(null)}>
-          <div className="modal" style={{ maxWidth: 820 }} onClick={(e) => e.stopPropagation()}>
+        <ModalShell onClose={() => setLightbox(null)} style={{ maxWidth: 820 }}>
             <img src={lightbox} alt="Foto del evento" style={{ maxWidth: '100%', border: '1px solid var(--border)' }} />
             <div className="row" style={{ justifyContent: 'flex-end' }}>
               <a className="lat-btn" href={lightbox} download="foto-evento.jpg">⇓ Descargar</a>
               <button className="lat-btn ghost" onClick={() => setLightbox(null)}>Cerrar</button>
             </div>
-          </div>
-        </div>
+        </ModalShell>
       )}
     </>
   );

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import ModalShell from '@/components/ModalShell';
 import type { InventoryItem, Procurement } from '@/lib/data';
 import { useStore } from '@/lib/store';
 
@@ -182,8 +183,7 @@ export default function InventoryPanel() {
       </div>
 
       {itemEditor && (
-        <div className="modal-overlay" onClick={() => setItemEditor(null)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <ModalShell onClose={() => setItemEditor(null)}>
             <h2>{originalItemName ? 'Editar artículo' : 'Agregar artículo'}</h2>
             <div className="lat-field">
               <label>Artículo</label>
@@ -208,8 +208,7 @@ export default function InventoryPanel() {
               <button className="lat-btn ghost" onClick={() => setItemEditor(null)}>Cancelar</button>
               <button className="lat-btn primary" onClick={saveItem}>Guardar artículo</button>
             </div>
-          </div>
-        </div>
+        </ModalShell>
       )}
     </>
   );

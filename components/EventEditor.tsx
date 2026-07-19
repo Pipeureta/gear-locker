@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import ModalShell from '@/components/ModalShell';
 import { DEFAULT_RADIO_CHANNELS, ROLES, rolesForPlayer, type CommsChannel, type GameEvent, type Role } from '@/lib/data';
 import { useStore } from '@/lib/store';
 
@@ -87,8 +88,7 @@ export default function EventEditor({
   };
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal event-editor-modal" onClick={(event) => event.stopPropagation()}>
+    <ModalShell onClose={onClose} className="event-editor-modal">
         <div className="row between event-editor-heading">
           <div>
             <h2>{initial ? `Editar evento — ${initial.name}` : 'Publicar evento'}</h2>
@@ -204,7 +204,6 @@ export default function EventEditor({
           <button className="lat-btn ghost" type="button" onClick={onClose}>Cancelar</button>
           <button className="lat-btn primary" type="button" onClick={save}>{initial ? 'Guardar cambios' : 'Publicar evento'}</button>
         </div>
-      </div>
-    </div>
+    </ModalShell>
   );
 }

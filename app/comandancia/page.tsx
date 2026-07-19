@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
+import ModalShell from '@/components/ModalShell';
 import {
   attendancePct,
   fmtCLP,
@@ -756,8 +757,7 @@ export default function ComandanciaPage() {
       )}
 
       {viewReceipt && (
-        <div className="modal-overlay" onClick={() => setViewReceipt(null)}>
-          <div className="modal" style={{ maxWidth: 640 }} onClick={(e) => e.stopPropagation()}>
+        <ModalShell onClose={() => setViewReceipt(null)} style={{ maxWidth: 640 }}>
             <h2>Comprobante</h2>
             {viewReceipt.startsWith('data:image') ? (
               <img src={viewReceipt} alt="Comprobante" style={{ maxWidth: '100%', border: '1px solid var(--border)' }} />
@@ -768,8 +768,7 @@ export default function ComandanciaPage() {
               <a className="lat-btn" href={viewReceipt} download="comprobante">⇓ Descargar</a>
               <button className="lat-btn ghost" onClick={() => setViewReceipt(null)}>Cerrar</button>
             </div>
-          </div>
-        </div>
+        </ModalShell>
       )}
     </>
   );

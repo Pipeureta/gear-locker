@@ -5,6 +5,7 @@
 // comandancia.
 
 import { useRef, useState } from 'react';
+import ModalShell from '@/components/ModalShell';
 import { attendancePct, pastEvents, rolesForPlayer } from '@/lib/data';
 import { useCurrentPlayer, useStore } from '@/lib/store';
 import { imageToDataUrl } from '@/lib/img';
@@ -79,8 +80,7 @@ export default function ProfileEditor({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
+    <ModalShell onClose={onClose}>
         <h2>Mi perfil</h2>
 
         <div className="photo-pick">
@@ -159,7 +159,6 @@ export default function ProfileEditor({ onClose }: { onClose: () => void }) {
           <button className="lat-btn ghost" onClick={onClose}>Cerrar</button>
           <button className="lat-btn primary" onClick={save}>Guardar cambios</button>
         </div>
-      </div>
-    </div>
+    </ModalShell>
   );
 }

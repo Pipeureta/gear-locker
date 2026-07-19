@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import ModalShell from '@/components/ModalShell';
 import { attendancePct, pastEvents, rolesForPlayer, type Player } from '@/lib/data';
 import { useCurrentPlayer, useStore } from '@/lib/store';
 import ProfileEditor from '@/components/ProfileEditor';
@@ -45,8 +46,7 @@ export default function PlayerProfileModal({
   };
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal member-profile-modal" onClick={(event) => event.stopPropagation()}>
+    <ModalShell onClose={onClose} className="member-profile-modal">
         <div className="member-profile-hero">
           <span className="avatar member-profile-avatar">
             {player.photoUrl ? <img src={player.photoUrl} alt={player.callsign} /> : player.callsign}
@@ -143,7 +143,6 @@ export default function PlayerProfileModal({
             <button className="lat-btn primary" type="button" onClick={() => setEditingSelf(true)}>Editar mi perfil</button>
           )}
         </div>
-      </div>
-    </div>
+    </ModalShell>
   );
 }
