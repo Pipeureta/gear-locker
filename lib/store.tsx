@@ -149,8 +149,14 @@ const DEFAULT_RSVPS: Record<string, Record<string, RsvpStatus>> = {
 const StoreCtx = createContext<StoreState | null>(null);
 
 const TEMPORARY_PASSWORD = 'TSD2026!';
+// Borrado único de credenciales: al subir la versión, las fichas listadas
+// pierden su contraseña guardada UNA sola vez. Quedan con acceso directo por
+// callsign hasta que definan una nueva en Mi perfil. Desaparece con Supabase.
+const CRED_WIPE_VERSION = 1;
+const CRED_WIPE_IDS = ['12b9'];
 const DEFAULT_CREDENTIALS: Record<string, string> = Object.fromEntries(
-  PLAYERS.map((player) => [player.id, TEMPORARY_PASSWORD]),
+  PLAYERS.filter((player) => !CRED_WIPE_IDS.includes(player.id))
+    .map((player) => [player.id, TEMPORARY_PASSWORD]),
 );
 
 const LS_KEY = 'gear-locker-tsd-v3'; // versionado: invalida estados de versiones anteriores
@@ -195,7 +201,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         if (s.players) setPlayers(s.players);
         if (s.adminNotes) setAdminNotes(s.adminNotes);
         if (s.events) setEvents(s.events);
-        if (s.credentials) setCredentials(s.credentials);
+        if (s.credentials) {
+          const cleaned = { ...s.credentials };
+          // Wipe único: solo si el estado guardado es de una versión anterior.
+          // Una contraseña nueva definida después del wipe sí se conserva.
+          if ((s.credWipeVersion ?? 0) < CRED_WIPE_VERSION) {
+            for (const id of CRED_WIPE_IDS) delete cleaned[id];
+          }
+          setCredentials(cleaned);
+        }
         if (s.passwordResets) setPasswordResets(s.passwordResets);
         if (s.dues) setDues(s.dues);
         if (typeof s.collectionAdjustment === 'number') setCollectionAdjustment(s.collectionAdjustment);
@@ -231,6 +245,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       localStorage.setItem(
         LS_KEY,
         JSON.stringify({
+          credWipeVersion: CRED_WIPE_VERSION,
           sessionPlayerId, players, adminNotes, events, credentials, passwordResets, dues, collectionAdjustment,
           rsvps, announcements, registrations, receipts, eventUploads, inventory,
           procurements, adminView,
@@ -265,22 +280,24 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const playerById = (id: string) => players.find((p) => p.id === id);
 
-  const login: StoreState['login'] = (callsignOrName, password) => {
-    const q = callsignOrName.trim().toLowerCase();
+  const login: StoreState['login'] = (callsignInput, password) => {
+    // El ingreso es solo por callsign: es único, corto y no expone nombres.
+    const q = callsignInput.trim().toLowerCase();
     if (!q) return 'no-encontrado';
     // Una solicitud pendiente tiene prioridad incluso si está reclamando una
     // ficha ya cargada: el acceso se habilita recién cuando comandancia aprueba.
-    if (registrations.some((r) => r.callsign.toLowerCase() === q || r.name.toLowerCase() === q)) {
+    if (registrations.some((r) => r.callsign.toLowerCase() === q)) {
       return 'pendiente';
     }
-    const p = players.find(
-      (x) => x.callsign.toLowerCase() === q || x.name.toLowerCase() === q,
-    );
+    const p = players.find((x) => x.callsign.toLowerCase() === q);
     if (!p) return 'no-encontrado';
     if (passwordResets.some((request) => request.playerId === p.id && request.status === 'aprobada')) {
       return 'restablecimiento-aprobado';
     }
-    if (credentials[p.id] !== password) return 'clave-incorrecta';
+    const storedPassword = credentials[p.id];
+    // Ficha sin contraseña (PASSWORDLESS_IDS o credencial nunca definida):
+    // entra directo con el callsign.
+    if (storedPassword !== undefined && storedPassword !== password) return 'clave-incorrecta';
     setSessionPlayerId(p.id);
     return 'ok';
   };
@@ -299,9 +316,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     passwordResets,
     requestPasswordReset: (callsignOrName) => {
       const q = callsignOrName.trim().toLowerCase();
-      const target = players.find(
-        (p) => p.callsign.toLowerCase() === q || p.name.toLowerCase() === q || p.nickname?.toLowerCase() === q,
-      );
+      const target = players.find((p) => p.callsign.toLowerCase() === q);
       if (!target) return 'no-encontrado';
       const existing = passwordResets.find((request) => request.playerId === target.id);
       if (existing?.status === 'aprobada') return 'aprobada';
@@ -328,9 +343,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setPasswordResets((prev) => prev.filter((request) => request.id !== id)),
     completePasswordReset: (callsignOrName, newPassword) => {
       const q = callsignOrName.trim().toLowerCase();
-      const target = players.find(
-        (p) => p.callsign.toLowerCase() === q || p.name.toLowerCase() === q || p.nickname?.toLowerCase() === q,
-      );
+      const target = players.find((p) => p.callsign.toLowerCase() === q);
       if (!target) return 'no-encontrado';
       const approved = passwordResets.find(
         (request) => request.playerId === target.id && request.status === 'aprobada',

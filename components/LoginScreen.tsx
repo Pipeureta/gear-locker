@@ -47,8 +47,8 @@ export default function LoginScreen() {
 
   const doLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user.trim() || !pass) {
-      setLoginMsg('Escribe tu callsign o nombre y tu contraseña.');
+    if (!user.trim()) {
+      setLoginMsg('Escribe tu callsign.');
       return;
     }
     const res = login(user, pass);
@@ -63,7 +63,7 @@ export default function LoginScreen() {
     const messages = {
       pendiente: 'Tu registro todavía está esperando la aprobación de Comandancia.',
       'clave-incorrecta': 'La contraseña no es correcta. Puedes intentar nuevamente o solicitar recuperarla.',
-      'no-encontrado': 'No encontramos ese callsign, nickname o nombre.',
+      'no-encontrado': 'No encontramos ese callsign. Revisa cómo lo escribiste o crea una cuenta en Registro.',
     } as const;
     setLoginMsg(messages[res]);
   };
@@ -159,7 +159,8 @@ export default function LoginScreen() {
       <div className="login-wrap">
         <div className="login-card">
           <div className="login-brand">
-            <div className="lb-title">◈ Gear Locker</div>
+            <img src="/logo.svg" alt="Team Six Devgru" className="login-logo" />
+            <div className="lb-title">Gear Locker</div>
             <div className="lb-sub">Team Six Devgru</div>
           </div>
 
@@ -172,12 +173,12 @@ export default function LoginScreen() {
           {tab === 'login' && (
             <form onSubmit={doLogin} className="form-stack">
               <div className="lat-field">
-                <label>Callsign, nickname o nombre</label>
+                <label>Callsign</label>
                 <input
                   className="lat-input"
                   value={user}
                   onChange={(e) => { setUser(e.target.value); setLoginMsg(null); }}
-                  placeholder="Ej: 12B9 o Integrante"
+                  placeholder="Tu callsign"
                   autoFocus
                 />
               </div>
@@ -190,7 +191,7 @@ export default function LoginScreen() {
                   onChange={(e) => { setPass(e.target.value); setLoginMsg(null); }}
                   placeholder="••••••••"
                 />
-                <span className="help">Las fichas precargadas usan temporalmente: <strong>TSD2026!</strong></span>
+                <span className="help">¿Primera vez? Pide tu clave temporal a comandancia.</span>
               </div>
               {loginMsg && <div className="lat-alert warn">{loginMsg}</div>}
               <button className="lat-btn primary" type="submit">Entrar</button>
@@ -270,8 +271,8 @@ export default function LoginScreen() {
             <form onSubmit={requestReset} className="form-stack">
               <span className="help">Comandancia debe aprobar el restablecimiento. Nadie podrá ver tu contraseña anterior.</span>
               <div className="lat-field">
-                <label>Callsign, nickname o nombre</label>
-                <input className="lat-input" value={recoveryUser} onChange={(e) => { setRecoveryUser(e.target.value); setRecoveryMsg(null); }} placeholder="Ej: 12B9" autoFocus />
+                <label>Callsign</label>
+                <input className="lat-input" value={recoveryUser} onChange={(e) => { setRecoveryUser(e.target.value); setRecoveryMsg(null); }} placeholder="Tu callsign" autoFocus />
               </div>
               {recoveryMsg && <div className="lat-alert warn">{recoveryMsg}</div>}
               <button className="lat-btn primary" type="submit">Solicitar recuperación</button>

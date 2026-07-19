@@ -55,8 +55,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       <div className="shell">
         <aside className="sidebar">
           <div className="sidebar-header">
-            <span className="brand-title">◈ Gear Locker</span>
-            <span className="brand-sub">Team Six Devgru</span>
+            <img src="/logo.svg" alt="TSD" className="sidebar-logo" />
+            <div>
+              <span className="brand-title" style={{ display: 'block' }}>Gear Locker</span>
+              <span className="brand-sub">Team Six Devgru</span>
+            </div>
           </div>
           <nav className="sidebar-nav">
             {GROUPS.map((group) => {

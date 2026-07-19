@@ -390,8 +390,9 @@ a { color: inherit; }
 }
 .sidebar-header {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
   padding: 16px 18px 14px;
   border-bottom: 1px solid var(--border);
   min-height: 56px;
@@ -739,6 +740,19 @@ a { color: inherit; }
   gap: 14px;
 }
 .login-brand { text-align: center; margin-bottom: 6px; }
+.login-logo {
+  width: 84px;
+  height: auto;
+  margin: 0 auto 10px;
+  display: block;
+  filter: drop-shadow(0 0 12px rgba(0, 229, 255, 0.35));
+}
+.sidebar-logo {
+  width: 34px;
+  height: auto;
+  flex-shrink: 0;
+  filter: drop-shadow(0 0 6px rgba(0, 229, 255, 0.3));
+}
 .login-brand .lb-title {
   font-size: 16.8px;
   font-weight: 700;
