@@ -59,6 +59,7 @@ interface StoreState {
   addPlayer: (p: Player) => void;
   updatePlayer: (id: string, patch: Partial<Player>) => void;
   removePlayer: (id: string) => void;
+  deletePlayer: (id: string) => void;
 
   events: GameEvent[];
   addEvent: (event: Omit<GameEvent, 'id'>) => string;
@@ -254,6 +255,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     addPlayer: (p) => setPlayers((prev) => [...prev, p]),
     updatePlayer: (id, patch) =>
       setPlayers((prev) => prev.map((p) => (p.id === id ? { ...p, ...patch } : p))),
+    deletePlayer: (id) => setPlayers((prev) => prev.filter((p) => p.id !== id)),
     removePlayer: (id) => {
       // Una baja conserva la ficha y todo el historial financiero. El integrante
       // queda inactivo y deja de generar cuotas nuevas.

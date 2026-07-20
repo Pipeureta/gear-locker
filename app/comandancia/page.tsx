@@ -40,7 +40,7 @@ export default function ComandanciaPage() {
     rsvps, players, dues, playerById,
     announcements, addAnnouncement, updateAnnouncement, removeAnnouncement,
     receipts, acceptReceipt,
-    addPlayer, updatePlayer, removePlayer, adminNotes,
+    addPlayer, updatePlayer, removePlayer, deletePlayer, adminNotes,
     setDuePaid, collectionAdjustment, setCollectionTotal,
     events, addEvent, updateEvent, removeEvent,
   } = useStore();
@@ -568,14 +568,14 @@ export default function ComandanciaPage() {
               <tr><th>Callsign</th><th>Nombre</th><th>Nickname</th><th>Teléfono</th><th>Rango</th><th>Estado</th><th>Admin</th><th></th></tr>
             </thead>
             <tbody>
-              {players.map((p) => (
-                <tr key={p.id} style={p.status !== 'activo' ? { opacity: 0.55 } : undefined}>
+              {active.map((p) => (
+                <tr key={p.id}>
                   <td className="acc">{p.callsign}</td>
                   <td>{p.name}</td>
                   <td className="mono-dim">{p.nickname ?? '—'}</td>
                   <td className="mono-dim">{p.phone ?? '—'}</td>
                   <td className="mono-dim">{p.rank}</td>
-                  <td className={p.status === 'activo' ? 'badge-ok' : 'badge-warn'}>{p.status.toUpperCase()}</td>
+                  <td className="badge-ok">{p.status.toUpperCase()}</td>
                   <td>{p.isAdmin ? '✦' : '—'}</td>
                   <td>
                     <span className="row" style={{ gap: 4, flexWrap: 'nowrap' }}>
@@ -598,6 +598,49 @@ export default function ComandanciaPage() {
             </tbody>
           </table>
         </div>
+
+        {players.length - active.length > 0 && (
+          <>
+            <div className="tiny dim-t" style={{ marginTop: 14 }}>Desactivados</div>
+            <div className="table-scroll">
+              <table className="lat-table">
+                <thead>
+                  <tr><th>Callsign</th><th>Nombre</th><th>Nickname</th><th>Teléfono</th><th>Rango</th><th>Estado</th><th>Admin</th><th></th></tr>
+                </thead>
+                <tbody>
+                  {players.filter((p) => p.status !== 'activo').map((p) => (
+                    <tr key={p.id} style={{ opacity: 0.55 }}>
+                      <td className="acc">{p.callsign}</td>
+                      <td>{p.name}</td>
+                      <td className="mono-dim">{p.nickname ?? '—'}</td>
+                      <td className="mono-dim">{p.phone ?? '—'}</td>
+                      <td className="mono-dim">{p.rank}</td>
+                      <td className="badge-warn">{p.status.toUpperCase()}</td>
+                      <td>{p.isAdmin ? '✦' : '—'}</td>
+                      <td>
+                        <span className="row" style={{ gap: 4, flexWrap: 'nowrap' }}>
+                          <button className="lat-btn ghost sm" onClick={() => setProfileId(p.id)}>Ver ficha</button>
+                          <button
+                            className="lat-btn danger sm"
+                            onClick={async () => {
+                              if (!confirm(`¿ELIMINAR definitivamente a ${p.callsign} ${p.name}? Se borra su ficha, cuotas y asistencia. No se puede deshacer.`)) return;
+                              if (p.id.startsWith('sb-')) {
+                                await createClient().from('players').delete().eq('id', p.id.slice(3));
+                              }
+                              deletePlayer(p.id);
+                            }}
+                          >
+                            Eliminar
+                          </button>
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
       </div>
 
       {/* --------------------------------------------------- checklist de equipo */}
