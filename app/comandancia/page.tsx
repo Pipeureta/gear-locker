@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import ModalShell from '@/components/ModalShell';
 import {
   attendancePct,
@@ -12,6 +12,7 @@ import {
   type Player,
 } from '@/lib/data';
 import { useCurrentPlayer, useStore } from '@/lib/store';
+import { createClient } from '@/lib/supabase/client';
 import MemberEditor from '@/components/MemberEditor';
 import PlayerProfileModal from '@/components/PlayerProfileModal';
 import EventEditor from '@/components/EventEditor';
@@ -19,13 +20,23 @@ import InventoryPanel from '@/components/InventoryPanel';
 
 let memberSeq = 100;
 
+interface RegistrationRequestRow {
+  id: string;
+  user_id: string;
+  matched_player_id: string | null;
+  name: string;
+  callsign: string;
+  nickname: string | null;
+  phone: string;
+  photo_url: string | null;
+  requested_at: string;
+}
+
 export default function ComandanciaPage() {
   const player = useCurrentPlayer();
   const {
     rsvps, players, dues, playerById,
     announcements, addAnnouncement, updateAnnouncement, removeAnnouncement,
-    registrations, approveRegistration, rejectRegistration,
-    passwordResets, approvePasswordReset, rejectPasswordReset,
     receipts, acceptReceipt,
     addPlayer, updatePlayer, removePlayer, adminNotes,
     setDuePaid, collectionAdjustment, setCollectionTotal,
@@ -33,6 +44,119 @@ export default function ComandanciaPage() {
     gearChecklist, addGearItem, removeGearItem,
   } = useStore();
   const [newGearItem, setNewGearItem] = useState('');
+
+  // ------------------------------------------------------- solicitudes (Supabase real)
+  const [requests, setRequests] = useState<RegistrationRequestRow[]>([]);
+  const [requestsError, setRequestsError] = useState<string | null>(null);
+  const [busyRequestId, setBusyRequestId] = useState<string | null>(null);
+
+  const loadRequests = async () => {
+    if (!player.isAdmin) return;
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from('registration_requests')
+      .select('id, user_id, matched_player_id, name, callsign, nickname, phone, photo_url, requested_at')
+      .order('requested_at', { ascending: true });
+    if (error) {
+      setRequestsError(error.message);
+      return;
+    }
+    setRequests((data as RegistrationRequestRow[]) ?? []);
+    setRequestsError(null);
+  };
+
+  useEffect(() => {
+    loadRequests();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [player.isAdmin]);
+
+  const localMatchByCallsign = (callsign: string) =>
+    players.find((p) => p.callsign.toLowerCase() === callsign.toLowerCase());
+
+  const approveRequest = async (req: RegistrationRequestRow) => {
+    setBusyRequestId(req.id);
+    const supabase = createClient();
+
+    if (req.matched_player_id) {
+      const { error } = await supabase
+        .from('players')
+        .update({
+          user_id: req.user_id,
+          name: req.name,
+          nickname: req.nickname,
+          phone: req.phone,
+          photo_url: req.photo_url,
+        })
+        .eq('id', req.matched_player_id);
+      if (error) {
+        setBusyRequestId(null);
+        setRequestsError('No se pudo vincular la ficha: ' + error.message);
+        return;
+      }
+      const local = localMatchByCallsign(req.callsign);
+      if (local) {
+        updatePlayer(local.id, {
+          name: req.name,
+          nickname: req.nickname ?? undefined,
+          phone: req.phone,
+          photoUrl: req.photo_url ?? undefined,
+        });
+      }
+    } else {
+      const { data: inserted, error } = await supabase
+        .from('players')
+        .insert({
+          user_id: req.user_id,
+          callsign: req.callsign,
+          name: req.name,
+          nickname: req.nickname,
+          phone: req.phone,
+          photo_url: req.photo_url,
+          rank: 'Nuevo',
+          status: 'activo',
+          usual_role: 'Rifleman',
+          usual_roles: ['Rifleman'],
+          is_admin: false,
+        })
+        .select()
+        .single();
+      if (error) {
+        setBusyRequestId(null);
+        setRequestsError('No se pudo crear la ficha: ' + error.message);
+        return;
+      }
+      addPlayer({
+        id: `sb-${inserted.id}`,
+        callsign: req.callsign,
+        name: req.name,
+        nickname: req.nickname ?? undefined,
+        rank: 'Nuevo',
+        status: 'activo',
+        usualRole: 'Rifleman',
+        usualRoles: ['Rifleman'],
+        isAdmin: false,
+        joinedAt: new Date().toISOString().slice(0, 10),
+        phone: req.phone,
+        photoUrl: req.photo_url ?? undefined,
+      });
+    }
+
+    await supabase.from('registration_requests').delete().eq('id', req.id);
+    setBusyRequestId(null);
+    await loadRequests();
+  };
+
+  const rejectRequest = async (req: RegistrationRequestRow) => {
+    setBusyRequestId(req.id);
+    const supabase = createClient();
+    const { error } = await supabase.from('registration_requests').delete().eq('id', req.id);
+    setBusyRequestId(null);
+    if (error) {
+      setRequestsError('No se pudo rechazar: ' + error.message);
+      return;
+    }
+    await loadRequests();
+  };
 
   const [annTitle, setAnnTitle] = useState('');
   const [annBody, setAnnBody] = useState('');
@@ -125,9 +249,7 @@ export default function ComandanciaPage() {
           Resumen
         </button>
         <button className={activeTab === 'equipo' ? 'active' : ''} onClick={() => setActiveTab('equipo')} role="tab">
-          Equipo {registrations.length + passwordResets.filter((item) => item.status === 'pendiente').length > 0 && (
-            <span className="badge">{registrations.length + passwordResets.filter((item) => item.status === 'pendiente').length}</span>
-          )}
+          Equipo {requests.length > 0 && <span className="badge">{requests.length}</span>}
         </button>
         <button className={activeTab === 'eventos' ? 'active' : ''} onClick={() => setActiveTab('eventos')} role="tab">
           Eventos
@@ -207,11 +329,11 @@ export default function ComandanciaPage() {
         </div>
         <div className="lat-panel">
           <div className="panel-head"><h3>Por revisar</h3></div>
-          <div className={`big-num ${pendingReceipts.length + registrations.length + passwordResets.filter((item) => item.status === 'pendiente').length > 0 ? 'warn' : 'ok'}`}>
-            {pendingReceipts.length + registrations.length + passwordResets.filter((item) => item.status === 'pendiente').length}
+          <div className={`big-num ${pendingReceipts.length + requests.length > 0 ? 'warn' : 'ok'}`}>
+            {pendingReceipts.length + requests.length}
           </div>
           <span className="tiny mut">
-            {registrations.length} ingresos · {passwordResets.filter((item) => item.status === 'pendiente').length} claves · {pendingReceipts.length} comprobantes
+            {requests.length} ingresos · {pendingReceipts.length} comprobantes
           </span>
         </div>
       </div>
@@ -220,79 +342,45 @@ export default function ComandanciaPage() {
       {activeTab === 'equipo' && (
         <>
           <div className="section-title">Solicitudes de ingreso</div>
-          {registrations.length === 0 && (
+          {requestsError && <div className="lat-alert warn" style={{ marginBottom: 10 }}>{requestsError}</div>}
+          {requests.length === 0 && !requestsError && (
             <div className="empty-state" style={{ marginBottom: 14 }}>
               No hay solicitudes pendientes. Cuando alguien se registre en la app, aparecerá aquí para que la apruebes o rechaces.
             </div>
           )}
           <div className="grid cols-2">
-            {registrations.map((r) => {
-              const matchedPlayer = players.find(
-                (p) => p.id === r.matchedPlayerId || p.callsign.toLowerCase() === r.callsign.toLowerCase(),
-              );
+            {requests.map((r) => {
+              const matchedPlayer = r.matched_player_id
+                ? players.find((p) => p.callsign.toLowerCase() === r.callsign.toLowerCase())
+                : undefined;
+              const busy = busyRequestId === r.id;
               return (
               <div key={r.id} className="lat-panel">
                 <div className="roster-card">
                   <span className="avatar lg">
-                    {r.photoUrl ? <img src={r.photoUrl} alt={r.callsign} /> : '?'}
+                    {r.photo_url ? <img src={r.photo_url} alt={r.callsign} /> : '?'}
                   </span>
                   <div style={{ flex: 1 }}>
                     <div className="rc-name">{r.name.toUpperCase()}</div>
                     <div className="rc-sub">{r.callsign.toUpperCase()}{r.nickname ? ` · ${r.nickname}` : ''} · {r.phone}</div>
-                    <div className="rc-sub dim-t">Solicitado el {fmtDate(r.requestedAt)}</div>
+                    <div className="rc-sub dim-t">Solicitado el {fmtDate(r.requested_at.slice(0, 10))}</div>
                   </div>
                 </div>
-                <div className={`lat-alert ${matchedPlayer ? 'ok' : 'warn'}`}>
+                <div className={`lat-alert ${r.matched_player_id ? 'ok' : 'warn'}`}>
                   <div className="alert-title">Destino de la solicitud</div>
-                  {matchedPlayer
-                    ? `Se vinculará con la ficha existente ${matchedPlayer.callsign} · ${matchedPlayer.name}. Se conservarán su rango, rol, estado, antigüedad y acceso.`
-                    : 'No existe una ficha con este callsign. Al aprobar se creará un integrante nuevo.'}
+                  {r.matched_player_id
+                    ? `Se vinculará con la ficha existente ${matchedPlayer?.callsign ?? r.callsign} · ${matchedPlayer?.name ?? ''}. Se conservarán su rango, rol, estado, antigüedad y acceso.`
+                    : 'No existe una ficha sin reclamar con este callsign. Al aprobar se creará un integrante nuevo.'}
                 </div>
                 <div className="row">
-                  <button className="lat-btn ok-line" onClick={() => approveRegistration(r.id)}>
-                    {matchedPlayer ? '✓ Aprobar y vincular' : '✓ Aprobar y crear ficha'}
+                  <button className="lat-btn ok-line" disabled={busy} onClick={() => approveRequest(r)}>
+                    {busy ? 'Procesando...' : r.matched_player_id ? '✓ Aprobar y vincular' : '✓ Aprobar y crear ficha'}
                   </button>
-                  <button className="lat-btn danger" onClick={() => rejectRegistration(r.id)}>
+                  <button className="lat-btn danger" disabled={busy} onClick={() => rejectRequest(r)}>
                     ✗ Rechazar
                   </button>
                 </div>
               </div>
-              );
-            })}
-          </div>
-        </>
-      )}
-
-      {activeTab === 'equipo' && passwordResets.length > 0 && (
-        <>
-          <div className="section-title">Recuperación de contraseñas</div>
-          <div className="grid cols-2">
-            {passwordResets.map((request) => {
-              const target = playerById(request.playerId);
-              return (
-                <div key={request.id} className="lat-panel">
-                  <div className="panel-head">
-                    <h3>{target?.callsign} · {target?.nickname || target?.name}</h3>
-                    <span className={`lat-chip ${request.status === 'aprobada' ? 'ok' : 'warn'}`}>
-                      {request.status === 'aprobada' ? 'Aprobada' : 'Pendiente'}
-                    </span>
-                  </div>
-                  <span className="help">
-                    {request.status === 'aprobada'
-                      ? 'La contraseña anterior fue retirada. El jugador ya puede elegir una nueva desde Recuperar.'
-                      : `Solicitud recibida el ${fmtDate(request.requestedAt)}.`}
-                  </span>
-                  {request.status === 'pendiente' && (
-                    <div className="row">
-                      <button className="lat-btn ok-line" onClick={() => approvePasswordReset(request.id)}>
-                        Aprobar restablecimiento
-                      </button>
-                      <button className="lat-btn danger" onClick={() => rejectPasswordReset(request.id)}>
-                        Rechazar
-                      </button>
-                    </div>
-                  )}
-                </div>
               );
             })}
           </div>

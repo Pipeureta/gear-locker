@@ -3,9 +3,11 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { useCurrentPlayer, useStore } from '@/lib/store';
+import { useCurrentPlayer } from '@/lib/store';
+import { useAuth } from '@/lib/auth-context';
 import LoginScreen from '@/components/LoginScreen';
 import ProfileEditor from '@/components/ProfileEditor';
+import PendingApprovalScreen from '@/components/PendingApprovalScreen';
 
 interface NavEntry {
   href: string;
@@ -32,8 +34,8 @@ function isActive(pathname: string, href: string): boolean {
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const { status, signOut, pendingRequest } = useAuth();
   const player = useCurrentPlayer();
-  const { sessionPlayerId, logout } = useStore();
   const [profileOpen, setProfileOpen] = useState(false);
 
   // Registro del service worker para modo PWA/offline.
@@ -43,8 +45,22 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  if (!sessionPlayerId || player.id === '__none__') {
+  if (status === 'loading') {
+    return (
+      <div className="lat-grid-bg">
+        <div className="login-wrap">
+          <span className="tiny mut">Cargando…</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (status === 'signed-out') {
     return <LoginScreen />;
+  }
+
+  if (status === 'pending') {
+    return <PendingApprovalScreen request={pendingRequest} onSignOut={signOut} />;
   }
 
   const visibleNav = NAV.filter((n) => !n.adminOnly || player.isAdmin);
@@ -95,7 +111,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 <span className="tiny dim-t">{player.callsign} · Mi perfil ✎</span>
               </span>
             </button>
-            <button className="lat-btn ghost sm" onClick={logout}>⏻ Cerrar sesión</button>
+            <button className="lat-btn ghost sm" onClick={signOut}>⏻ Cerrar sesión</button>
           </div>
         </aside>
 
@@ -115,7 +131,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               >
                 {player.photoUrl ? <img src={player.photoUrl} alt={player.callsign} /> : player.callsign}
               </button>
-              <button className="lat-btn ghost sm mobile-only" onClick={logout} title="Cerrar sesión">⏻</button>
+              <button className="lat-btn ghost sm mobile-only" onClick={signOut} title="Cerrar sesión">⏻</button>
             </div>
           </header>
           <div className="content">{children}</div>

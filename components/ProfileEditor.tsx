@@ -2,66 +2,93 @@
 
 // Panel "Mi perfil": cada integrante ve sus datos y edita su información
 // personal (nombre, teléfono y foto). Callsign, rango y rol los administra
-// comandancia.
+// comandancia. Guarda directo contra Supabase (players + Auth), a
+// diferencia del resto de la app que todavía vive en el store local.
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import ModalShell from '@/components/ModalShell';
 import { attendancePct, pastEvents, rolesForPlayer, ROLES, type PrimaryWeapon, type Role } from '@/lib/data';
-import { useCurrentPlayer, useStore } from '@/lib/store';
-import { imageToDataUrl } from '@/lib/img';
+import { useCurrentPlayer } from '@/lib/store';
+import { useAuth } from '@/lib/auth-context';
+import { createClient } from '@/lib/supabase/client';
 
 export default function ProfileEditor({ onClose }: { onClose: () => void }) {
   const player = useCurrentPlayer();
-  const { updatePlayer, players, changePassword, gearChecklist } = useStore();
+  const { authUser, supaPlayer, refreshPlayer } = useAuth();
   const [primaries, setPrimaries] = useState<PrimaryWeapon[]>(player.primaries ?? []);
   const [gear, setGear] = useState<Record<string, boolean>>(player.gear ?? {});
+  const [gearChecklist, setGearChecklist] = useState<string[]>([]);
   const [name, setName] = useState(player.name);
-  const [callsign, setCallsign] = useState(player.callsign);
   const [nickname, setNickname] = useState(player.nickname ?? '');
   const [phone, setPhone] = useState(player.phone ?? '');
   const [photoUrl, setPhotoUrl] = useState(player.photoUrl);
+  const [photoFile, setPhotoFile] = useState<File | undefined>();
   const [msg, setMsg] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [passwordMsg, setPasswordMsg] = useState<{ text: string; ok: boolean } | null>(null);
+  const [passwordBusy, setPasswordBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const attendance = attendancePct(player.id);
   const history = pastEvents();
   const attended = history.filter((event) => event.attended?.includes(player.id)).length;
 
-  const pickPhoto = async (f: File | undefined) => {
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.from('gear_checklist_items').select('name').then(({ data }) => {
+      if (data) setGearChecklist(data.map((row) => row.name as string));
+    });
+  }, []);
+
+  const pickPhoto = (f: File | undefined) => {
     if (!f) return;
-    try {
-      setPhotoUrl(await imageToDataUrl(f, 256));
-      setSaved(false);
-    } catch {
-      setMsg('No pudimos procesar esa imagen. Intenta con otra (JPG o PNG).');
-    }
+    setPhotoFile(f);
+    setPhotoUrl(URL.createObjectURL(f));
+    setSaved(false);
   };
 
-  const save = () => {
-    if (!name.trim() || !callsign.trim()) {
-      setMsg('Tu nombre y callsign no pueden quedar vacíos.');
+  const save = async () => {
+    if (!authUser || !supaPlayer) return;
+    if (!name.trim()) {
+      setMsg('Tu nombre no puede quedar vacío.');
       return;
     }
-    if (players.some((item) => item.id !== player.id && item.callsign.toLowerCase() === callsign.trim().toLowerCase())) {
-      setMsg('Ese callsign ya está siendo usado por otro integrante.');
-      return;
-    }
-    updatePlayer(player.id, {
-      name: name.trim(),
-      callsign: callsign.trim().toUpperCase(),
-      nickname: nickname.trim() || undefined,
-      phone: phone.trim() || undefined,
-      photoUrl,
-      primaries: primaries
-        .map((p) => ({ ...p, name: p.name.trim() }))
-        .filter((p) => p.name),
-      gear,
-    });
+    setSaving(true);
     setMsg(null);
+    const supabase = createClient();
+
+    let uploadedUrl: string | undefined;
+    if (photoFile) {
+      const path = `${authUser.id}/${Date.now()}-${photoFile.name}`;
+      const { error: upErr } = await supabase.storage.from('player-photos').upload(path, photoFile, { upsert: true });
+      if (upErr) {
+        setSaving(false);
+        setMsg('No se pudo subir la foto: ' + upErr.message);
+        return;
+      }
+      uploadedUrl = supabase.storage.from('player-photos').getPublicUrl(path).data.publicUrl;
+    }
+
+    const { error } = await supabase
+      .from('players')
+      .update({
+        name: name.trim(),
+        nickname: nickname.trim() || null,
+        phone: phone.trim() || null,
+        photo_url: uploadedUrl ?? photoUrl ?? null,
+        primaries: primaries.map((p) => ({ ...p, name: p.name.trim() })).filter((p) => p.name),
+        gear,
+      })
+      .eq('user_id', authUser.id);
+
+    setSaving(false);
+    if (error) {
+      setMsg('No se pudo guardar: ' + error.message);
+      return;
+    }
+    await refreshPlayer();
     setSaved(true);
   };
 
@@ -70,21 +97,23 @@ export default function ProfileEditor({ onClose }: { onClose: () => void }) {
     setSaved(false);
   };
 
-  const savePassword = () => {
-    if (newPassword.length < 8) {
-      setPasswordMsg({ text: 'La contraseña nueva debe tener al menos 8 caracteres.', ok: false });
+  const savePassword = async () => {
+    if (newPassword.length < 6) {
+      setPasswordMsg({ text: 'La contraseña nueva debe tener al menos 6 caracteres.', ok: false });
       return;
     }
     if (newPassword !== confirmPassword) {
       setPasswordMsg({ text: 'Las contraseñas nuevas no coinciden.', ok: false });
       return;
     }
-    const result = changePassword(player.id, currentPassword, newPassword);
-    if (result === 'clave-incorrecta') {
-      setPasswordMsg({ text: 'La contraseña actual no es correcta.', ok: false });
+    setPasswordBusy(true);
+    const supabase = createClient();
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    setPasswordBusy(false);
+    if (error) {
+      setPasswordMsg({ text: error.message, ok: false });
       return;
     }
-    setCurrentPassword('');
     setNewPassword('');
     setConfirmPassword('');
     setPasswordMsg({ text: 'Contraseña actualizada correctamente.', ok: true });
@@ -111,7 +140,7 @@ export default function ProfileEditor({ onClose }: { onClose: () => void }) {
         <div className="grid cols-2 compact-grid">
           <div className="lat-field">
             <label>Callsign</label>
-            <input className="lat-input" value={callsign} onChange={(e) => { setCallsign(e.target.value); setSaved(false); }} />
+            <input className="lat-input" value={player.callsign} disabled title="Solo comandancia puede cambiar tu callsign" />
           </div>
           <div className="lat-field">
             <label>Nickname</label>
@@ -121,6 +150,10 @@ export default function ProfileEditor({ onClose }: { onClose: () => void }) {
         <div className="lat-field">
           <label>Teléfono</label>
           <input className="lat-input" type="tel" value={phone} onChange={(e) => { setPhone(e.target.value); setSaved(false); }} placeholder="+56 9 ..." />
+        </div>
+        <div className="lat-field">
+          <label>Correo</label>
+          <input className="lat-input" value={authUser?.email ?? ''} disabled title="Cambiar el correo llega pronto" />
         </div>
 
         <div className="profile-stat">
@@ -198,21 +231,19 @@ export default function ProfileEditor({ onClose }: { onClose: () => void }) {
               </label>
             ))}
           </div>
-          <span className="tiny mut">
-            {gearChecklist.filter((i) => gear[i]).length}/{gearChecklist.length} items — recuerda Guardar cambios.
-          </span>
+          {gearChecklist.length > 0 && (
+            <span className="tiny mut">
+              {gearChecklist.filter((i) => gear[i]).length}/{gearChecklist.length} items — recuerda Guardar cambios.
+            </span>
+          )}
         </div>
 
         <div className="profile-password">
           <div className="panel-head"><h3>Seguridad</h3></div>
-          <div className="lat-field">
-            <label>Contraseña actual</label>
-            <input className="lat-input" type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} placeholder="Tu contraseña actual" />
-          </div>
           <div className="grid cols-2 compact-grid">
             <div className="lat-field">
               <label>Nueva contraseña</label>
-              <input className="lat-input" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="Mínimo 8 caracteres" />
+              <input className="lat-input" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="Mínimo 6 caracteres" />
             </div>
             <div className="lat-field">
               <label>Repetir contraseña</label>
@@ -220,7 +251,9 @@ export default function ProfileEditor({ onClose }: { onClose: () => void }) {
             </div>
           </div>
           {passwordMsg && <div className={`lat-alert ${passwordMsg.ok ? 'ok' : 'warn'}`}><span className="help">{passwordMsg.text}</span></div>}
-          <button className="lat-btn" type="button" onClick={savePassword}>Actualizar contraseña</button>
+          <button className="lat-btn" type="button" onClick={savePassword} disabled={passwordBusy}>
+            {passwordBusy ? 'Guardando...' : 'Actualizar contraseña'}
+          </button>
         </div>
 
         {msg && <div className="lat-alert warn"><span className="help">{msg}</span></div>}
@@ -228,7 +261,9 @@ export default function ProfileEditor({ onClose }: { onClose: () => void }) {
 
         <div className="row" style={{ justifyContent: 'flex-end' }}>
           <button className="lat-btn ghost" onClick={onClose}>Cerrar</button>
-          <button className="lat-btn primary" onClick={save}>Guardar cambios</button>
+          <button className="lat-btn primary" onClick={save} disabled={saving}>
+            {saving ? 'Guardando...' : 'Guardar cambios'}
+          </button>
         </div>
     </ModalShell>
   );

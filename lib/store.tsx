@@ -1,9 +1,11 @@
 'use client';
 
-// Estado de cliente para el modo demo. Todo lo que aquí vive en localStorage
-// (integrantes, cuotas, avisos, solicitudes, comprobantes, archivos de evento)
-// se reemplaza por Supabase (Postgres + Storage + Auth) al conectar la base:
-// las estructuras calzan 1:1 con supabase/schema.sql.
+// Estado de cliente para cuotas, eventos, inventario, avisos, etc. La
+// identidad del usuario (login, registro, aprobación) vive en
+// lib/auth-context.tsx y es real (Supabase Auth + tabla players). Todo lo
+// demás en este archivo sigue en localStorage por ahora — se migra a
+// Supabase en una fase siguiente; las estructuras ya calzan 1:1 con
+// supabase/schema.sql para cuando llegue ese momento.
 
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import {
@@ -22,22 +24,12 @@ import {
   type InventoryItem,
   type Player,
   type Procurement,
+  type Rank,
+  type MemberStatus,
+  type Role,
   type RsvpStatus,
 } from './data';
-
-export interface Registration {
-  id: string;
-  name: string;
-  callsign: string;
-  nickname?: string;
-  phone: string;
-  photoUrl?: string;
-  password: string;
-  // Ficha de la nómina que esta cuenta solicita reclamar. Comandancia debe
-  // aprobar la vinculación antes de que el usuario pueda ingresar con ella.
-  matchedPlayerId?: string;
-  requestedAt: string;
-}
+import { useAuth, type SupaPlayerRow } from './auth-context';
 
 export interface Receipt {
   id: string;
@@ -47,13 +39,6 @@ export interface Receipt {
   dataUrl: string;
   uploadedAt: string;
   status: 'revision' | 'aceptado';
-}
-
-export interface PasswordResetRequest {
-  id: string;
-  playerId: string;
-  requestedAt: string;
-  status: 'pendiente' | 'aprobada';
 }
 
 export interface UploadedEventFile {
@@ -66,19 +51,6 @@ export interface UploadedEventFile {
 }
 
 interface StoreState {
-  // Sesión demo. En producción las credenciales viven en Supabase Auth.
-  sessionPlayerId: string | null;
-  login: (callsignOrName: string, password: string) =>
-    'ok' | 'no-encontrado' | 'pendiente' | 'clave-incorrecta' | 'restablecimiento-aprobado';
-  logout: () => void;
-  changePassword: (playerId: string, currentPassword: string, newPassword: string) =>
-    'ok' | 'clave-incorrecta';
-  passwordResets: PasswordResetRequest[];
-  requestPasswordReset: (callsignOrName: string) => 'enviada' | 'no-encontrado' | 'ya-pendiente' | 'aprobada';
-  approvePasswordReset: (id: string) => void;
-  rejectPasswordReset: (id: string) => void;
-  completePasswordReset: (callsignOrName: string, newPassword: string) => 'ok' | 'no-aprobada' | 'no-encontrado';
-
   players: Player[];
   playerById: (id: string) => Player | undefined;
   addPlayer: (p: Player) => void;
@@ -105,11 +77,6 @@ interface StoreState {
   addAnnouncement: (a: Omit<Announcement, 'id' | 'date'>) => void;
   updateAnnouncement: (id: string, patch: Omit<Announcement, 'id' | 'date'>) => void;
   removeAnnouncement: (id: string) => void;
-
-  registrations: Registration[];
-  submitRegistration: (r: Omit<Registration, 'id' | 'requestedAt' | 'matchedPlayerId'>) => 'enviada' | 'duplicada';
-  approveRegistration: (id: string) => void;
-  rejectRegistration: (id: string) => void;
 
   receipts: Receipt[];
   addReceipt: (playerId: string, month: string, filename: string, dataUrl: string) => void;
@@ -151,18 +118,7 @@ const DEFAULT_RSVPS: Record<string, Record<string, RsvpStatus>> = {
 
 const StoreCtx = createContext<StoreState | null>(null);
 
-const TEMPORARY_PASSWORD = 'TSD2026!';
-// Borrado único de credenciales: al subir la versión, las fichas listadas
-// pierden su contraseña guardada UNA sola vez. Quedan con acceso directo por
-// callsign hasta que definan una nueva en Mi perfil. Desaparece con Supabase.
-const CRED_WIPE_VERSION = 1;
-const CRED_WIPE_IDS = ['12b9'];
-const DEFAULT_CREDENTIALS: Record<string, string> = Object.fromEntries(
-  PLAYERS.filter((player) => !CRED_WIPE_IDS.includes(player.id))
-    .map((player) => [player.id, TEMPORARY_PASSWORD]),
-);
-
-const LS_KEY = 'gear-locker-tsd-v3'; // versionado: invalida estados de versiones anteriores
+const LS_KEY = 'gear-locker-tsd-v4'; // versionado: invalida estados de versiones anteriores (v3 tenía login simulado)
 
 let seq = 0;
 function uid(prefix: string): string {
@@ -175,19 +131,15 @@ function today(): string {
 }
 
 export function StoreProvider({ children }: { children: ReactNode }) {
-  const [sessionPlayerId, setSessionPlayerId] = useState<string | null>(null);
   const [players, setPlayers] = useState<Player[]>(PLAYERS);
   const [adminNotes, setAdminNotes] = useState<Record<string, string>>(ADMIN_NOTES);
   const [events, setEvents] = useState<GameEvent[]>(EVENTS);
-  const [credentials, setCredentials] = useState<Record<string, string>>(DEFAULT_CREDENTIALS);
-  const [passwordResets, setPasswordResets] = useState<PasswordResetRequest[]>([]);
   const [dues, setDues] = useState<Due[]>(DUES);
   // Ajuste manual sobre la suma de cuotas pagadas. Permite que comandancia
   // concilie el total real sin perder la actualización automática por cuotas.
   const [collectionAdjustment, setCollectionAdjustment] = useState(0);
   const [rsvps, setRsvps] = useState(DEFAULT_RSVPS);
   const [announcements, setAnnouncements] = useState<Announcement[]>(SEED_ANNOUNCEMENTS);
-  const [registrations, setRegistrations] = useState<Registration[]>([]);
   const [receipts, setReceipts] = useState<Receipt[]>([]);
   const [eventUploads, setEventUploads] = useState<UploadedEventFile[]>([]);
   const [inventory, setInventory] = useState<InventoryItem[]>(INVENTORY);
@@ -196,29 +148,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const loaded = useRef(false);
 
   useEffect(() => {
-    const apply = (raw: string | null, includeSession: boolean) => {
+    const apply = (raw: string | null) => {
       if (!raw) return;
       try {
         const s = JSON.parse(raw);
-        if (includeSession && 'sessionPlayerId' in s) setSessionPlayerId(s.sessionPlayerId);
         if (s.players) setPlayers(s.players);
         if (s.adminNotes) setAdminNotes(s.adminNotes);
         if (s.events) setEvents(s.events);
-        if (s.credentials) {
-          const cleaned = { ...s.credentials };
-          // Wipe único: solo si el estado guardado es de una versión anterior.
-          // Una contraseña nueva definida después del wipe sí se conserva.
-          if ((s.credWipeVersion ?? 0) < CRED_WIPE_VERSION) {
-            for (const id of CRED_WIPE_IDS) delete cleaned[id];
-          }
-          setCredentials(cleaned);
-        }
-        if (s.passwordResets) setPasswordResets(s.passwordResets);
         if (s.dues) setDues(s.dues);
         if (typeof s.collectionAdjustment === 'number') setCollectionAdjustment(s.collectionAdjustment);
         if (s.rsvps) setRsvps(s.rsvps);
         if (s.announcements) setAnnouncements(s.announcements);
-        if (s.registrations) setRegistrations(s.registrations);
         if (s.receipts) setReceipts(s.receipts);
         if (s.eventUploads) setEventUploads(s.eventUploads);
         if (s.inventory) setInventory(s.inventory);
@@ -229,14 +169,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       }
     };
 
-    apply(localStorage.getItem(LS_KEY), true);
+    apply(localStorage.getItem(LS_KEY));
     loaded.current = true;
 
     // Sincronización en vivo entre pestañas/ventanas del mismo navegador:
     // cualquier cambio hecho en otra pestaña se refleja aquí sin recargar.
     // (Entre dispositivos distintos, esto lo hará Supabase Realtime.)
     const onStorage = (e: StorageEvent) => {
-      if (e.key === LS_KEY) apply(e.newValue, false);
+      if (e.key === LS_KEY) apply(e.newValue);
     };
     window.addEventListener('storage', onStorage);
     return () => window.removeEventListener('storage', onStorage);
@@ -248,16 +188,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       localStorage.setItem(
         LS_KEY,
         JSON.stringify({
-          credWipeVersion: CRED_WIPE_VERSION,
-          sessionPlayerId, players, adminNotes, events, credentials, passwordResets, dues, collectionAdjustment,
-          rsvps, announcements, registrations, receipts, eventUploads, inventory,
+          players, adminNotes, events, dues, collectionAdjustment,
+          rsvps, announcements, receipts, eventUploads, inventory,
           procurements, gearChecklist,
         }),
       );
     } catch {
       /* cuota de localStorage excedida — el estado sigue en memoria */
     }
-  }, [sessionPlayerId, players, adminNotes, events, credentials, passwordResets, dues, collectionAdjustment, rsvps, announcements, registrations, receipts, eventUploads, inventory, procurements, gearChecklist]);
+  }, [players, adminNotes, events, dues, collectionAdjustment, rsvps, announcements, receipts, eventUploads, inventory, procurements, gearChecklist]);
 
   useEffect(() => {
     if (!loaded.current) return;
@@ -283,80 +222,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const playerById = (id: string) => players.find((p) => p.id === id);
 
-  const login: StoreState['login'] = (callsignInput, password) => {
-    // El ingreso es solo por callsign: es único, corto y no expone nombres.
-    const q = callsignInput.trim().toLowerCase();
-    if (!q) return 'no-encontrado';
-    // Una solicitud pendiente tiene prioridad incluso si está reclamando una
-    // ficha ya cargada: el acceso se habilita recién cuando comandancia aprueba.
-    if (registrations.some((r) => r.callsign.toLowerCase() === q)) {
-      return 'pendiente';
-    }
-    const p = players.find((x) => x.callsign.toLowerCase() === q);
-    if (!p) return 'no-encontrado';
-    if (passwordResets.some((request) => request.playerId === p.id && request.status === 'aprobada')) {
-      return 'restablecimiento-aprobado';
-    }
-    const storedPassword = credentials[p.id];
-    // Ficha sin contraseña (PASSWORDLESS_IDS o credencial nunca definida):
-    // entra directo con el callsign.
-    if (storedPassword !== undefined && storedPassword !== password) return 'clave-incorrecta';
-    setSessionPlayerId(p.id);
-    return 'ok';
-  };
-
   const value: StoreState = {
-    sessionPlayerId,
-    login,
-    logout: () => setSessionPlayerId(null),
-    changePassword: (playerId, currentPassword, newPassword) => {
-      if (credentials[playerId] && credentials[playerId] !== currentPassword) {
-        return 'clave-incorrecta';
-      }
-      setCredentials((prev) => ({ ...prev, [playerId]: newPassword }));
-      return 'ok';
-    },
-    passwordResets,
-    requestPasswordReset: (callsignOrName) => {
-      const q = callsignOrName.trim().toLowerCase();
-      const target = players.find((p) => p.callsign.toLowerCase() === q);
-      if (!target) return 'no-encontrado';
-      const existing = passwordResets.find((request) => request.playerId === target.id);
-      if (existing?.status === 'aprobada') return 'aprobada';
-      if (existing) return 'ya-pendiente';
-      setPasswordResets((prev) => [
-        ...prev,
-        { id: uid('reset'), playerId: target.id, requestedAt: today(), status: 'pendiente' },
-      ]);
-      return 'enviada';
-    },
-    approvePasswordReset: (id) => {
-      const request = passwordResets.find((item) => item.id === id);
-      if (!request) return;
-      setPasswordResets((prev) =>
-        prev.map((item) => (item.id === id ? { ...item, status: 'aprobada' } : item)),
-      );
-      setCredentials((prev) => {
-        const next = { ...prev };
-        delete next[request.playerId];
-        return next;
-      });
-    },
-    rejectPasswordReset: (id) =>
-      setPasswordResets((prev) => prev.filter((request) => request.id !== id)),
-    completePasswordReset: (callsignOrName, newPassword) => {
-      const q = callsignOrName.trim().toLowerCase();
-      const target = players.find((p) => p.callsign.toLowerCase() === q);
-      if (!target) return 'no-encontrado';
-      const approved = passwordResets.find(
-        (request) => request.playerId === target.id && request.status === 'aprobada',
-      );
-      if (!approved) return 'no-aprobada';
-      setCredentials((prev) => ({ ...prev, [target.id]: newPassword }));
-      setPasswordResets((prev) => prev.filter((request) => request.id !== approved.id));
-      return 'ok';
-    },
-
     players,
     playerById,
     addPlayer: (p) => setPlayers((prev) => [...prev, p]),
@@ -365,15 +231,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     removePlayer: (id) => {
       // Una baja conserva la ficha y todo el historial financiero. El integrante
       // queda inactivo y deja de generar cuotas nuevas.
-      setPlayers((prev) => prev.map((player) => player.id === id ? { ...player, status: 'inactivo', isAdmin: false } : player));
-      setCredentials((prev) => {
-        const next = { ...prev };
-        delete next[id];
-        return next;
-      });
-      setPasswordResets((prev) => prev.filter((request) => request.playerId !== id));
-
-      if (sessionPlayerId === id) setSessionPlayerId(null);
+      setPlayers((prev) =>
+        prev.map((player) => (player.id === id ? { ...player, status: 'inactivo', isAdmin: false } : player)),
+      );
     },
     events,
     addEvent: (event) => {
@@ -427,69 +287,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     updateAnnouncement: (id, patch) =>
       setAnnouncements((prev) => prev.map((a) => (a.id === id ? { ...a, ...patch } : a))),
     removeAnnouncement: (id) => setAnnouncements((prev) => prev.filter((a) => a.id !== id)),
-
-    registrations,
-    submitRegistration: (r) => {
-      const normalizedCallsign = r.callsign.trim().toLowerCase();
-      if (registrations.some((x) => x.callsign.trim().toLowerCase() === normalizedCallsign)) {
-        return 'duplicada';
-      }
-      const matchedPlayer = players.find(
-        (p) => p.callsign.trim().toLowerCase() === normalizedCallsign,
-      );
-      setRegistrations((prev) => [
-        ...prev,
-        {
-          ...r,
-          callsign: r.callsign.trim().toUpperCase(),
-          matchedPlayerId: matchedPlayer?.id,
-          id: uid('reg'),
-          requestedAt: today(),
-        },
-      ]);
-      return 'enviada';
-    },
-    approveRegistration: (id) => {
-      const r = registrations.find((x) => x.id === id);
-      if (!r) return;
-      // Se vuelve a buscar por callsign al aprobar por si la nómina cambió
-      // después de enviada la solicitud. Así nunca se crea un duplicado.
-      const existing = players.find(
-        (p) => p.id === r.matchedPlayerId || p.callsign.toLowerCase() === r.callsign.toLowerCase(),
-      );
-      if (existing) {
-        setPlayers((prev) =>
-          prev.map((p) =>
-            p.id === existing.id
-              ? { ...p, name: r.name, nickname: r.nickname, phone: r.phone, photoUrl: r.photoUrl }
-              : p,
-          ),
-        );
-        setCredentials((prev) => ({ ...prev, [existing.id]: r.password || TEMPORARY_PASSWORD }));
-      } else {
-        const newId = uid('m');
-        setPlayers((prev) => [
-          ...prev,
-          {
-            id: newId,
-            callsign: r.callsign.toUpperCase(),
-            name: r.name,
-            nickname: r.nickname,
-            rank: 'Nuevo',
-            status: 'activo',
-            usualRole: 'Rifleman',
-            usualRoles: ['Rifleman'],
-            isAdmin: false,
-            joinedAt: today(),
-            phone: r.phone,
-            photoUrl: r.photoUrl,
-          },
-        ]);
-        setCredentials((prev) => ({ ...prev, [newId]: r.password || TEMPORARY_PASSWORD }));
-      }
-      setRegistrations((prev) => prev.filter((x) => x.id !== id));
-    },
-    rejectRegistration: (id) => setRegistrations((prev) => prev.filter((x) => x.id !== id)),
 
     receipts,
     addReceipt: (playerId, month, filename, dataUrl) =>
@@ -547,18 +344,56 @@ export function useStore(): StoreState {
   return ctx;
 }
 
-// Jugador con sesión iniciada. Solo debe usarse en páginas dentro del shell
-// autenticado (AppShell no renderiza contenido sin sesión).
+function fromSupaPlayer(row: SupaPlayerRow, localId: string): Player {
+  return {
+    id: localId,
+    callsign: row.callsign,
+    name: row.name,
+    nickname: row.nickname ?? undefined,
+    rank: row.rank as Rank,
+    status: row.status as MemberStatus,
+    usualRole: (row.usual_roles?.[0] as Role | undefined) ?? (row.usual_role as Role) ?? 'Rifleman',
+    usualRoles: (row.usual_roles as Role[] | null) ?? undefined,
+    isAdmin: row.is_admin,
+    joinedAt: row.joined_at,
+    phone: row.phone ?? undefined,
+    photoUrl: row.photo_url ?? undefined,
+    primaries: row.primaries ?? undefined,
+    gear: row.gear ?? undefined,
+  };
+}
+
+// Jugador con sesión iniciada. La identidad (nombre, callsign, foto, admin,
+// primarias, equipo) viene de Supabase Auth — fuente real. El resto de la
+// app (cuotas, eventos, notas) todavía vive en el store local, así que acá
+// se "calza" la ficha real con la ficha local que comparte callsign (o se
+// crea una si es alguien nuevo que no estaba en la nómina de ejemplo).
 export function useCurrentPlayer(): Player {
-  const { sessionPlayerId, playerById } = useStore();
-  const player = sessionPlayerId ? playerById(sessionPlayerId) : undefined;
-  if (!player) {
-    // Sesión inválida (p. ej. integrante eliminado): devolver placeholder
-    // inofensivo; AppShell redirige a login en el siguiente render.
+  const { supaPlayer } = useAuth();
+  const { players, addPlayer } = useStore();
+
+  const localMatch = supaPlayer
+    ? players.find((p) => p.callsign.toLowerCase() === supaPlayer.callsign.toLowerCase())
+    : undefined;
+  const localId = localMatch?.id ?? (supaPlayer ? `sb-${supaPlayer.id}` : '__none__');
+
+  useEffect(() => {
+    if (supaPlayer && !localMatch) {
+      addPlayer(fromSupaPlayer(supaPlayer, `sb-${supaPlayer.id}`));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [supaPlayer?.id, !!localMatch]);
+
+  if (!supaPlayer) {
     return {
       id: '__none__', callsign: '—', name: 'Invitado', rank: 'Nuevo',
       status: 'activo', usualRole: 'Rifleman', usualRoles: ['Rifleman'], isAdmin: false, joinedAt: today(),
     };
   }
-  return player;
+
+  const merged = fromSupaPlayer(supaPlayer, localId);
+  // Conserva del registro local lo que Supabase todavía no gestiona
+  // (por ahora nada crítico — se deja el bloque por si se agregan campos
+  // locales-only más adelante).
+  return localMatch ? { ...localMatch, ...merged } : merged;
 }
