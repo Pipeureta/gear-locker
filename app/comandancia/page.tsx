@@ -13,6 +13,7 @@ import {
 } from '@/lib/data';
 import { useCurrentPlayer, useStore } from '@/lib/store';
 import { createClient } from '@/lib/supabase/client';
+import { useGearChecklist } from '@/lib/gear-checklist';
 import MemberEditor from '@/components/MemberEditor';
 import PlayerProfileModal from '@/components/PlayerProfileModal';
 import EventEditor from '@/components/EventEditor';
@@ -41,9 +42,62 @@ export default function ComandanciaPage() {
     addPlayer, updatePlayer, removePlayer, adminNotes,
     setDuePaid, collectionAdjustment, setCollectionTotal,
     events, addEvent, updateEvent, removeEvent,
-    gearChecklist, addGearItem, removeGearItem,
   } = useStore();
   const [newGearItem, setNewGearItem] = useState('');
+
+  // ------------------------------------------------------- checklist de equipo (Supabase real)
+  const { items: gearChecklist, reload: reloadGearChecklist } = useGearChecklist();
+  const [gearCounts, setGearCounts] = useState<Record<string, number>>({});
+  const [gearActiveCount, setGearActiveCount] = useState(0);
+  const [gearError, setGearError] = useState<string | null>(null);
+
+  const loadGearCounts = async () => {
+    if (!player.isAdmin) return;
+    const supabase = createClient();
+    const { data, error } = await supabase.from('players').select('gear').eq('status', 'activo');
+    if (error) {
+      setGearError(error.message);
+      return;
+    }
+    const counts: Record<string, number> = {};
+    (data ?? []).forEach((row) => {
+      const gear = (row.gear as Record<string, boolean>) ?? {};
+      Object.entries(gear).forEach(([item, has]) => {
+        if (has) counts[item] = (counts[item] ?? 0) + 1;
+      });
+    });
+    setGearCounts(counts);
+    setGearActiveCount((data ?? []).length);
+    setGearError(null);
+  };
+
+  useEffect(() => {
+    loadGearCounts();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [player.isAdmin, gearChecklist]);
+
+  const addChecklistItem = async () => {
+    const name = newGearItem.trim();
+    if (!name) return;
+    const supabase = createClient();
+    const { error } = await supabase.from('gear_checklist_items').insert({ name });
+    if (error) {
+      setGearError(error.message);
+      return;
+    }
+    setNewGearItem('');
+    await reloadGearChecklist();
+  };
+
+  const removeChecklistItem = async (name: string) => {
+    const supabase = createClient();
+    const { error } = await supabase.from('gear_checklist_items').delete().eq('name', name);
+    if (error) {
+      setGearError(error.message);
+      return;
+    }
+    await reloadGearChecklist();
+  };
 
   // ------------------------------------------------------- solicitudes (Supabase real)
   const [requests, setRequests] = useState<RegistrationRequestRow[]>([]);
@@ -550,20 +604,21 @@ export default function ComandanciaPage() {
         <span className="help">
           Esta lista aparece en el perfil de cada integrante para que marque qué tiene. Agrega o quita items según el estándar del equipo.
         </span>
+        {gearError && <div className="lat-alert warn">{gearError}</div>}
         <div className="gear-grid">
           {gearChecklist.map((item) => {
-            const haveCount = players.filter((p) => p.status === 'activo' && p.gear?.[item]).length;
+            const haveCount = gearCounts[item] ?? 0;
             return (
               <span key={item} className="gear-check readonly on" style={{ justifyContent: 'space-between' }}>
                 <span>{item}</span>
                 <span className="row" style={{ gap: 6, flexWrap: 'nowrap' }}>
-                  <span className="tiny mut" title="Integrantes activos que lo tienen">{haveCount}/{active.length}</span>
+                  <span className="tiny mut" title="Integrantes activos que lo tienen">{haveCount}/{gearActiveCount}</span>
                   <button
                     className="cr-btn"
                     style={{ minHeight: 22, padding: '1px 7px' }}
                     title="Quitar de la lista"
                     onClick={() => {
-                      if (confirm(`¿Quitar "${item}" de la checklist de todo el equipo?`)) removeGearItem(item);
+                      if (confirm(`¿Quitar "${item}" de la checklist de todo el equipo?`)) removeChecklistItem(item);
                     }}
                   >
                     ✗
@@ -572,6 +627,7 @@ export default function ComandanciaPage() {
               </span>
             );
           })}
+          {gearChecklist.length === 0 && <div className="empty-state">Aún no hay items en la checklist.</div>}
         </div>
         <div className="row">
           <input
@@ -580,12 +636,12 @@ export default function ComandanciaPage() {
             value={newGearItem}
             onChange={(e) => setNewGearItem(e.target.value)}
             placeholder="Ej: Guantes tácticos"
-            onKeyDown={(e) => { if (e.key === 'Enter') { addGearItem(newGearItem); setNewGearItem(''); } }}
+            onKeyDown={(e) => { if (e.key === 'Enter') addChecklistItem(); }}
           />
           <button
             className="lat-btn"
             disabled={!newGearItem.trim()}
-            onClick={() => { addGearItem(newGearItem); setNewGearItem(''); }}
+            onClick={addChecklistItem}
           >
             + Agregar item
           </button>

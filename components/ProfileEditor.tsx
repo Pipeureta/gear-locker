@@ -5,19 +5,20 @@
 // comandancia. Guarda directo contra Supabase (players + Auth), a
 // diferencia del resto de la app que todavía vive en el store local.
 
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import ModalShell from '@/components/ModalShell';
 import { attendancePct, pastEvents, rolesForPlayer, ROLES, type PrimaryWeapon, type Role } from '@/lib/data';
 import { useCurrentPlayer } from '@/lib/store';
 import { useAuth } from '@/lib/auth-context';
+import { useGearChecklist } from '@/lib/gear-checklist';
 import { createClient } from '@/lib/supabase/client';
 
 export default function ProfileEditor({ onClose }: { onClose: () => void }) {
   const player = useCurrentPlayer();
   const { authUser, supaPlayer, refreshPlayer } = useAuth();
+  const { items: gearChecklist } = useGearChecklist();
   const [primaries, setPrimaries] = useState<PrimaryWeapon[]>(player.primaries ?? []);
   const [gear, setGear] = useState<Record<string, boolean>>(player.gear ?? {});
-  const [gearChecklist, setGearChecklist] = useState<string[]>([]);
   const [name, setName] = useState(player.name);
   const [nickname, setNickname] = useState(player.nickname ?? '');
   const [phone, setPhone] = useState(player.phone ?? '');
@@ -34,13 +35,6 @@ export default function ProfileEditor({ onClose }: { onClose: () => void }) {
   const attendance = attendancePct(player.id);
   const history = pastEvents();
   const attended = history.filter((event) => event.attended?.includes(player.id)).length;
-
-  useEffect(() => {
-    const supabase = createClient();
-    supabase.from('gear_checklist_items').select('name').then(({ data }) => {
-      if (data) setGearChecklist(data.map((row) => row.name as string));
-    });
-  }, []);
 
   const pickPhoto = (f: File | undefined) => {
     if (!f) return;

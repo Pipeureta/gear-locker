@@ -10,7 +10,6 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   ADMIN_NOTES,
-  DEFAULT_GEAR_CHECKLIST,
   DUES,
   DUE_AMOUNT,
   EVENTS,
@@ -94,11 +93,6 @@ interface StoreState {
   addProcurement: (item: Procurement) => void;
   updateProcurement: (originalItem: string, item: Procurement) => void;
   removeProcurement: (item: string) => void;
-
-  // Lista de items de equipo personal, administrada por comandancia.
-  gearChecklist: string[];
-  addGearItem: (name: string) => void;
-  removeGearItem: (name: string) => void;
 }
 
 const DEFAULT_RSVPS: Record<string, Record<string, RsvpStatus>> = {
@@ -144,7 +138,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [eventUploads, setEventUploads] = useState<UploadedEventFile[]>([]);
   const [inventory, setInventory] = useState<InventoryItem[]>(INVENTORY);
   const [procurements, setProcurements] = useState<Procurement[]>(PROCUREMENTS);
-  const [gearChecklist, setGearChecklist] = useState<string[]>(DEFAULT_GEAR_CHECKLIST);
   const loaded = useRef(false);
 
   useEffect(() => {
@@ -163,7 +156,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         if (s.eventUploads) setEventUploads(s.eventUploads);
         if (s.inventory) setInventory(s.inventory);
         if (s.procurements) setProcurements(s.procurements);
-        if (s.gearChecklist) setGearChecklist(s.gearChecklist);
       } catch {
         /* estado corrupto — se ignora */
       }
@@ -190,13 +182,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         JSON.stringify({
           players, adminNotes, events, dues, collectionAdjustment,
           rsvps, announcements, receipts, eventUploads, inventory,
-          procurements, gearChecklist,
+          procurements,
         }),
       );
     } catch {
       /* cuota de localStorage excedida — el estado sigue en memoria */
     }
-  }, [players, adminNotes, events, dues, collectionAdjustment, rsvps, announcements, receipts, eventUploads, inventory, procurements, gearChecklist]);
+  }, [players, adminNotes, events, dues, collectionAdjustment, rsvps, announcements, receipts, eventUploads, inventory, procurements]);
 
   useEffect(() => {
     if (!loaded.current) return;
@@ -323,16 +315,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setProcurements((prev) => prev.map((current) => (current.item === originalItem ? item : current))),
     removeProcurement: (item) =>
       setProcurements((prev) => prev.filter((current) => current.item !== item)),
-
-    gearChecklist,
-    addGearItem: (name) => {
-      const clean = name.trim();
-      if (!clean) return;
-      setGearChecklist((prev) =>
-        prev.some((item) => item.toLowerCase() === clean.toLowerCase()) ? prev : [...prev, clean],
-      );
-    },
-    removeGearItem: (name) => setGearChecklist((prev) => prev.filter((item) => item !== name)),
   };
 
   return <StoreCtx.Provider value={value}>{children}</StoreCtx.Provider>;
