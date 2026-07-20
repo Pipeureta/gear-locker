@@ -39,7 +39,7 @@ export default function EventEditor({
 }) {
   const { players } = useStore();
   const [name, setName] = useState(initial?.name ?? '');
-  const [type, setType] = useState<EventType>(initial?.type ?? 'Skirmish');
+  const [type, setType] = useState<EventType>(initial?.type ?? 'Combat Mission');
   const [date, setDate] = useState(initial?.date ?? '');
   const [startTime, setStartTime] = useState(initial?.startTime ?? '09:00');
   const [location, setLocation] = useState(initial?.location ?? '');
@@ -101,7 +101,7 @@ export default function EventEditor({
           <div className="panel-head"><h3>Información general</h3></div>
           <div className="grid cols-2 compact-grid">
             <div className="lat-field"><label>Nombre del evento</label><input className="lat-input" value={name} onChange={(event) => setName(event.target.value)} placeholder="Ej: Operación Nómada" /></div>
-            <div className="lat-field"><label>Tipo</label><select className="lat-select" value={type} onChange={(event) => setType(event.target.value as EventType)}><option>MILSIM</option><option>Skirmish</option><option>Entrenamiento</option></select></div>
+            <div className="lat-field"><label>Tipo</label><select className="lat-select" value={type} onChange={(event) => setType(event.target.value as EventType)}><option>MILSIM</option><option>Combat Mission</option><option>Partida Abierta</option><option>Partida Cerrada</option><option>Entrenamiento</option></select></div>
             <div className="lat-field"><label>Fecha</label><input className="lat-input" type="date" value={date} onChange={(event) => setDate(event.target.value)} /></div>
             <div className="lat-field"><label>Hora de inicio</label><input className="lat-input" type="time" value={startTime} onChange={(event) => setStartTime(event.target.value)} /></div>
             <div className="lat-field"><label>Lugar</label><input className="lat-input" value={location} onChange={(event) => setLocation(event.target.value)} placeholder="Cancha o recinto" /></div>

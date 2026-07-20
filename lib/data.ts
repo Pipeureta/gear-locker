@@ -144,7 +144,7 @@ export type RsvpStatus = 'va' | 'no-va' | 'tal-vez';
 export interface GameEvent {
   id: string;
   name: string;
-  type: 'MILSIM' | 'Skirmish' | 'Entrenamiento';
+  type: 'MILSIM' | 'Combat Mission' | 'Partida Abierta' | 'Partida Cerrada' | 'Entrenamiento';
   date: string;
   startTime: string;
   location: string;
@@ -330,8 +330,8 @@ export const EVENTS: GameEvent[] = [
   },
   {
     id: 'e-skirmish-jul',
-    name: 'SKIRMISH DOMINICAL',
-    type: 'Skirmish',
+    name: 'PARTIDA ABIERTA DOMINICAL',
+    type: 'Partida Abierta',
     date: '2026-07-26',
     startTime: '09:30',
     location: 'Cancha CQB La Reina',

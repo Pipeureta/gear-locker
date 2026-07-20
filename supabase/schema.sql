@@ -107,7 +107,7 @@ create table if not exists public.dues (
 create table if not exists public.events (
   id uuid primary key default gen_random_uuid(),
   name text not null,
-  type text not null check (type in ('MILSIM', 'Skirmish', 'Entrenamiento')),
+  type text not null check (type in ('MILSIM', 'Combat Mission', 'Partida Abierta', 'Partida Cerrada', 'Entrenamiento')),
   date date not null,
   start_time text not null default '09:00',
   location text not null,
@@ -118,6 +118,12 @@ create table if not exists public.events (
   reminders jsonb not null default '[]',  -- [string]
   created_at timestamptz not null default now()
 );
+
+-- Compatibilidad: instalaciones creadas antes de agregar Combat Mission /
+-- Partida Abierta / Partida Cerrada (reemplazan a "Skirmish").
+alter table public.events drop constraint if exists events_type_check;
+alter table public.events add constraint events_type_check
+  check (type in ('MILSIM', 'Combat Mission', 'Partida Abierta', 'Partida Cerrada', 'Entrenamiento'));
 
 create table if not exists public.event_rsvps (
   event_id uuid not null references public.events (id) on delete cascade,
