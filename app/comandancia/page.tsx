@@ -19,6 +19,7 @@ import PlayerProfileModal from '@/components/PlayerProfileModal';
 import EventEditor from '@/components/EventEditor';
 import AttendanceEditor from '@/components/AttendanceEditor';
 import InventoryPanel from '@/components/InventoryPanel';
+import { syncEventNotify, broadcastEventAnnouncement, removeEventNotify } from '@/lib/notify-sync';
 
 let memberSeq = 100;
 
@@ -601,7 +602,7 @@ export default function ComandanciaPage() {
 
         {players.length - active.length > 0 && (
           <>
-            <div className="tiny dim-t" style={{ marginTop: 14 }}>Desactivados</div>
+            <div className="tiny dim-t" style={{ marginTop: 14 }}>Inactivos</div>
             <div className="table-scroll">
               <table className="lat-table">
                 <thead>
@@ -620,6 +621,7 @@ export default function ComandanciaPage() {
                       <td>
                         <span className="row" style={{ gap: 4, flexWrap: 'nowrap' }}>
                           <button className="lat-btn ghost sm" onClick={() => setProfileId(p.id)}>Ver ficha</button>
+                          <button className="lat-btn ghost sm" onClick={() => setEditing(p)}>Editar</button>
                           <button
                             className="lat-btn danger sm"
                             onClick={async () => {
@@ -949,7 +951,7 @@ export default function ComandanciaPage() {
                     <button className="lat-btn sm" type="button" onClick={() => setAttendanceEventId(event.id)}>Asistencia</button>
                     <button className="lat-btn sm" type="button" onClick={() => setEditingEvent(event)}>Editar</button>
                     <button className="lat-btn danger sm" type="button" onClick={() => {
-                      if (confirm(`¿Eliminar el evento ${event.name}? También se quitarán sus respuestas y archivos.`)) removeEvent(event.id);
+                      if (confirm(`¿Eliminar el evento ${event.name}? También se quitarán sus respuestas y archivos.`)) { removeEvent(event.id); removeEventNotify(event.id); }
                     }}>Eliminar</button>
                   </div>
                 </div>
@@ -970,8 +972,15 @@ export default function ComandanciaPage() {
           initial={editingEvent ?? undefined}
           onClose={() => { setEditingEvent(null); setAddingEvent(false); }}
           onSave={(draft) => {
-            if (editingEvent) updateEvent(editingEvent.id, draft);
-            else addEvent(draft);
+            if (editingEvent) {
+              updateEvent(editingEvent.id, draft);
+              syncEventNotify({ ...draft, id: editingEvent.id });
+            } else {
+              const id = addEvent(draft);
+              const event = { ...draft, id };
+              syncEventNotify(event);
+              broadcastEventAnnouncement(event);
+            }
             setEditingEvent(null);
             setAddingEvent(false);
           }}
@@ -994,9 +1003,24 @@ export default function ComandanciaPage() {
         <MemberEditor
           initial={editing ?? undefined}
           onClose={() => { setEditing(null); setAdding(false); }}
-          onSave={(data) => {
+          onSave={async (data) => {
             if (editing) {
               updatePlayer(editing.id, data);
+              if (editing.id.startsWith('sb-')) {
+                await createClient()
+                  .from('players')
+                  .update({
+                    name: data.name,
+                    nickname: data.nickname ?? null,
+                    phone: data.phone ?? null,
+                    rank: data.rank,
+                    status: data.status === 'inactivo' ? 'receso' : data.status,
+                    usual_role: data.usualRole,
+                    usual_roles: data.usualRoles,
+                    is_admin: data.isAdmin,
+                  })
+                  .eq('id', editing.id.slice(3));
+              }
             } else {
               memberSeq += 1;
               addPlayer({ ...data, id: `m-${Date.now()}-${memberSeq}` });

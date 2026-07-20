@@ -376,10 +376,52 @@ create policy ann_select on public.announcements for select to authenticated usi
 drop policy if exists ann_admin on public.announcements;
 create policy ann_admin on public.announcements for all to authenticated using (public.is_admin()) with check (public.is_admin());
 
--- push_subscriptions: cada uno gestiona solo las suyas.
+-- push_subscriptions: cada uno gestiona solo las suyas; admin puede leer
+-- todas para mandar el anuncio de evento nuevo.
 drop policy if exists push_subs_own on public.push_subscriptions;
 create policy push_subs_own on public.push_subscriptions for all to authenticated
-  using (user_id = auth.uid()) with check (user_id = auth.uid());
+  using (user_id = auth.uid() or public.is_admin()) with check (user_id = auth.uid());
+
+-- =============================================================================
+-- Notificaciones de eventos (espejo liviano para el cron de recordatorios)
+-- =============================================================================
+-- Los eventos siguen viviendo en el store local (ver README), así que acá
+-- solo se refleja lo mínimo que el cron necesita para decidir cuándo avisar:
+-- fecha/hora real del evento y qué recordatorios ya se mandaron.
+
+create table if not exists public.event_notify (
+  id text primary key, -- mismo id que el evento en el store local
+  name text not null,
+  location text,
+  event_at timestamptz not null,
+  announced boolean not null default false,
+  reminded_5d boolean not null default false,
+  reminded_2d boolean not null default false,
+  reminded_3h boolean not null default false,
+  created_at timestamptz not null default now()
+);
+
+-- Espejo de RSVPs: solo para que el cron sepa quién no ha respondido.
+create table if not exists public.event_rsvp_sync (
+  event_id text not null references public.event_notify (id) on delete cascade,
+  user_id uuid not null references auth.users (id) on delete cascade,
+  status text not null check (status in ('va', 'tal-vez', 'no-va')),
+  updated_at timestamptz not null default now(),
+  primary key (event_id, user_id)
+);
+
+alter table public.event_notify enable row level security;
+alter table public.event_rsvp_sync enable row level security;
+
+drop policy if exists event_notify_select on public.event_notify;
+create policy event_notify_select on public.event_notify for select to authenticated using (true);
+drop policy if exists event_notify_admin on public.event_notify;
+create policy event_notify_admin on public.event_notify for all to authenticated
+  using (public.is_admin()) with check (public.is_admin());
+
+drop policy if exists rsvp_sync_own on public.event_rsvp_sync;
+create policy rsvp_sync_own on public.event_rsvp_sync for all to authenticated
+  using (user_id = auth.uid() or public.is_admin()) with check (user_id = auth.uid());
 
 -- =============================================================================
 -- Storage — buckets y políticas
