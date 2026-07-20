@@ -29,6 +29,7 @@ import {
   type RsvpStatus,
 } from './data';
 import { useAuth, type SupaPlayerRow } from './auth-context';
+import { createClient } from './supabase/client';
 
 export interface Receipt {
   id: string;
@@ -125,6 +126,7 @@ function today(): string {
 }
 
 export function StoreProvider({ children }: { children: ReactNode }) {
+  const { session } = useAuth();
   const [players, setPlayers] = useState<Player[]>(PLAYERS);
   const [adminNotes, setAdminNotes] = useState<Record<string, string>>(ADMIN_NOTES);
   const [events, setEvents] = useState<GameEvent[]>(EVENTS);
@@ -139,6 +141,34 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [inventory, setInventory] = useState<InventoryItem[]>(INVENTORY);
   const [procurements, setProcurements] = useState<Procurement[]>(PROCUREMENTS);
   const loaded = useRef(false);
+
+  // El arreglo local (lib/data.ts) solo trae callsigns y datos de ejemplo —
+  // a propósito, porque ese archivo está en el repo público. Los datos
+  // reales de cada integrante (nombre, foto, rol, etc.) viven en Supabase;
+  // acá se traen y se sobreponen sobre el arreglo local por callsign, así
+  // el roster, las cuotas y los eventos muestran a la gente real.
+  useEffect(() => {
+    if (!session) return;
+    const supabase = createClient();
+    supabase
+      .from('players')
+      .select('*')
+      .then(({ data, error }) => {
+        if (error || !data) return;
+        setPlayers((prev) => {
+          const next = [...prev];
+          (data as SupaPlayerRow[]).forEach((remote) => {
+            const idx = next.findIndex((p) => p.callsign.toLowerCase() === remote.callsign.toLowerCase());
+            if (idx >= 0) {
+              next[idx] = fromSupaPlayer(remote, next[idx].id);
+            } else {
+              next.push(fromSupaPlayer(remote, `sb-${remote.id}`));
+            }
+          });
+          return next;
+        });
+      });
+  }, [session]);
 
   useEffect(() => {
     const apply = (raw: string | null) => {
