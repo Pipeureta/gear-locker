@@ -61,6 +61,7 @@ interface StoreState {
   addEvent: (event: Omit<GameEvent, 'id'>) => string;
   updateEvent: (id: string, event: Omit<GameEvent, 'id'>) => void;
   removeEvent: (id: string) => void;
+  setEventAttended: (eventId: string, playerId: string, attended: boolean) => void;
   adminNotes: Record<string, string>;
   setAdminNote: (playerId: string, note: string) => void;
   removeAdminNote: (playerId: string) => void;
@@ -274,6 +275,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       });
       setEventUploads((prev) => prev.filter((file) => file.eventId !== id));
     },
+    setEventAttended: (eventId, playerId, attended) =>
+      setEvents((prev) =>
+        prev.map((event) => {
+          if (event.id !== eventId) return event;
+          const current = new Set(event.attended ?? []);
+          if (attended) current.add(playerId);
+          else current.delete(playerId);
+          return { ...event, attended: [...current] };
+        }),
+      ),
     adminNotes,
     setAdminNote: (playerId, note) =>
       setAdminNotes((prev) => ({ ...prev, [playerId]: note.trim() })),

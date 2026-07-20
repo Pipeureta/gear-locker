@@ -17,6 +17,7 @@ import { useGearChecklist } from '@/lib/gear-checklist';
 import MemberEditor from '@/components/MemberEditor';
 import PlayerProfileModal from '@/components/PlayerProfileModal';
 import EventEditor from '@/components/EventEditor';
+import AttendanceEditor from '@/components/AttendanceEditor';
 import InventoryPanel from '@/components/InventoryPanel';
 
 let memberSeq = 100;
@@ -220,6 +221,7 @@ export default function ComandanciaPage() {
   const [profileId, setProfileId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [editingEvent, setEditingEvent] = useState<(typeof events)[number] | null>(null);
+  const [attendanceEventId, setAttendanceEventId] = useState<string | null>(null);
   const [addingEvent, setAddingEvent] = useState(false);
   const [viewReceipt, setViewReceipt] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'resumen' | 'equipo' | 'eventos' | 'finanzas' | 'inventario'>('resumen');
@@ -894,10 +896,14 @@ export default function ComandanciaPage() {
                   <div className="event-admin-info">
                     <strong>{event.name}</strong>
                     <span>{fmtDate(event.date)} · {event.startTime} · {event.location}</span>
-                    <small>{event.comms.length} señales de radio · {event.type}</small>
+                    <small>
+                      {event.comms.length} señales de radio · {event.type}
+                      {new Date(event.date + 'T23:59') < new Date() && ` · ${event.attended?.length ?? 0} asistieron`}
+                    </small>
                   </div>
                   <div className="event-admin-actions">
                     <Link href={`/eventos/${event.id}`} className="lat-btn ghost sm">Ver briefing</Link>
+                    <button className="lat-btn sm" type="button" onClick={() => setAttendanceEventId(event.id)}>Asistencia</button>
                     <button className="lat-btn sm" type="button" onClick={() => setEditingEvent(event)}>Editar</button>
                     <button className="lat-btn danger sm" type="button" onClick={() => {
                       if (confirm(`¿Eliminar el evento ${event.name}? También se quitarán sus respuestas y archivos.`)) removeEvent(event.id);
@@ -913,6 +919,9 @@ export default function ComandanciaPage() {
 
       {activeTab === 'inventario' && <InventoryPanel />}
       {/* --------------------------------------------------- modales */}
+      {attendanceEventId && (
+        <AttendanceEditor eventId={attendanceEventId} onClose={() => setAttendanceEventId(null)} />
+      )}
       {(editingEvent || addingEvent) && (
         <EventEditor
           initial={editingEvent ?? undefined}
