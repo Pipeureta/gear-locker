@@ -252,79 +252,111 @@ $$;
 
 -- players: todos los autenticados ven el roster; solo admin edita; cada uno
 -- puede editar su propio perfil (no is_admin/rank).
+drop policy if exists players_select on public.players;
 create policy players_select on public.players
   for select to authenticated using (true);
+drop policy if exists players_admin_all on public.players;
 create policy players_admin_all on public.players
   for all to authenticated using (public.is_admin()) with check (public.is_admin());
+drop policy if exists players_self_update on public.players;
 create policy players_self_update on public.players
   for update to authenticated
   using (user_id = auth.uid())
   with check (user_id = auth.uid() and is_admin = (select is_admin from public.players where user_id = auth.uid()));
 
 -- registration_requests: el solicitante crea y ve la suya; admin ve y borra todas.
+drop policy if exists reg_self_insert on public.registration_requests;
 create policy reg_self_insert on public.registration_requests
   for insert to authenticated with check (user_id = auth.uid());
+drop policy if exists reg_self_select on public.registration_requests;
 create policy reg_self_select on public.registration_requests
   for select to authenticated using (user_id = auth.uid() or public.is_admin());
+drop policy if exists reg_admin_delete on public.registration_requests;
 create policy reg_admin_delete on public.registration_requests
   for delete to authenticated using (public.is_admin());
 
 -- payment_receipts: cada uno sube y ve los suyos; admin ve todos y cambia estado.
+drop policy if exists receipts_self_insert on public.payment_receipts;
 create policy receipts_self_insert on public.payment_receipts
   for insert to authenticated
   with check (player_id in (select id from public.players where user_id = auth.uid()));
+drop policy if exists receipts_select on public.payment_receipts;
 create policy receipts_select on public.payment_receipts
   for select to authenticated
   using (player_id in (select id from public.players where user_id = auth.uid()) or public.is_admin());
+drop policy if exists receipts_admin_update on public.payment_receipts;
 create policy receipts_admin_update on public.payment_receipts
   for update to authenticated using (public.is_admin()) with check (public.is_admin());
 
 -- gear_checklist_items: visible para todos; solo admin agrega o quita items.
+drop policy if exists gear_items_select on public.gear_checklist_items;
 create policy gear_items_select on public.gear_checklist_items
   for select to authenticated using (true);
+drop policy if exists gear_items_admin on public.gear_checklist_items;
 create policy gear_items_admin on public.gear_checklist_items
   for all to authenticated using (public.is_admin()) with check (public.is_admin());
 
 -- dues: cada jugador ve solo las suyas; admin ve y edita todas.
+drop policy if exists dues_self_select on public.dues;
 create policy dues_self_select on public.dues
   for select to authenticated
   using (player_id in (select id from public.players where user_id = auth.uid()) or public.is_admin());
+drop policy if exists dues_admin_write on public.dues;
 create policy dues_admin_write on public.dues
   for all to authenticated using (public.is_admin()) with check (public.is_admin());
 
 -- events + derivados: lectura para todos; escritura solo admin
 -- (excepto el RSVP propio).
+drop policy if exists events_select on public.events;
 create policy events_select on public.events for select to authenticated using (true);
+drop policy if exists events_admin on public.events;
 create policy events_admin on public.events for all to authenticated using (public.is_admin()) with check (public.is_admin());
 
+drop policy if exists rsvps_select on public.event_rsvps;
 create policy rsvps_select on public.event_rsvps for select to authenticated using (true);
+drop policy if exists rsvps_self on public.event_rsvps;
 create policy rsvps_self on public.event_rsvps
   for all to authenticated
   using (player_id in (select id from public.players where user_id = auth.uid()) or public.is_admin())
   with check (player_id in (select id from public.players where user_id = auth.uid()) or public.is_admin());
 
+drop policy if exists assignments_select on public.event_assignments;
 create policy assignments_select on public.event_assignments for select to authenticated using (true);
+drop policy if exists assignments_admin on public.event_assignments;
 create policy assignments_admin on public.event_assignments for all to authenticated using (public.is_admin()) with check (public.is_admin());
 
+drop policy if exists files_select on public.event_files;
 create policy files_select on public.event_files for select to authenticated using (true);
+drop policy if exists files_admin on public.event_files;
 create policy files_admin on public.event_files for all to authenticated using (public.is_admin()) with check (public.is_admin());
 
+drop policy if exists comms_select on public.comms_plan;
 create policy comms_select on public.comms_plan for select to authenticated using (true);
+drop policy if exists comms_admin on public.comms_plan;
 create policy comms_admin on public.comms_plan for all to authenticated using (public.is_admin()) with check (public.is_admin());
 
+drop policy if exists attendance_select on public.event_attendance;
 create policy attendance_select on public.event_attendance for select to authenticated using (true);
+drop policy if exists attendance_admin on public.event_attendance;
 create policy attendance_admin on public.event_attendance for all to authenticated using (public.is_admin()) with check (public.is_admin());
 
 -- admin_notes: SOLO admin (ni siquiera el jugador aludido las ve).
+drop policy if exists notes_admin on public.admin_notes;
 create policy notes_admin on public.admin_notes for all to authenticated using (public.is_admin()) with check (public.is_admin());
 
+drop policy if exists inventory_select on public.team_inventory;
 create policy inventory_select on public.team_inventory for select to authenticated using (true);
+drop policy if exists inventory_admin on public.team_inventory;
 create policy inventory_admin on public.team_inventory for all to authenticated using (public.is_admin()) with check (public.is_admin());
 
+drop policy if exists procurements_select on public.procurements;
 create policy procurements_select on public.procurements for select to authenticated using (true);
+drop policy if exists procurements_admin on public.procurements;
 create policy procurements_admin on public.procurements for all to authenticated using (public.is_admin()) with check (public.is_admin());
 
+drop policy if exists ann_select on public.announcements;
 create policy ann_select on public.announcements for select to authenticated using (true);
+drop policy if exists ann_admin on public.announcements;
 create policy ann_admin on public.announcements for all to authenticated using (public.is_admin()) with check (public.is_admin());
 
 -- =============================================================================
