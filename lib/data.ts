@@ -181,12 +181,16 @@ export interface Announcement {
 
 // ---------------------------------------------------------------- pago de cuotas
 
+// Datos reales de transferencia: viven en variables de entorno (.env.local
+// / Vercel), no en el código, porque son datos personales (RUT, correo) que
+// no deben quedar en un repositorio público. Los valores de acá abajo son
+// solo placeholders que se ven si esas variables no están configuradas.
 export const PAYMENT_INFO = {
-  holder: 'Nombre del titular',
-  rut: '00.000.000-0',
-  bank: 'Banco Estado',
-  accountType: 'Cuenta RUT',
-  email: 'correo@ejemplo.com',
+  holder: process.env.NEXT_PUBLIC_PAYMENT_HOLDER ?? 'Nombre del titular (configurar NEXT_PUBLIC_PAYMENT_HOLDER)',
+  rut: process.env.NEXT_PUBLIC_PAYMENT_RUT ?? '00.000.000-0',
+  bank: process.env.NEXT_PUBLIC_PAYMENT_BANK ?? 'Nombre del banco',
+  accountType: process.env.NEXT_PUBLIC_PAYMENT_ACCOUNT_TYPE ?? 'Tipo de cuenta',
+  email: process.env.NEXT_PUBLIC_PAYMENT_EMAIL ?? 'correo@ejemplo.com',
   subject: 'Pago cuota + nombre o número',
   note: 'La cuota no será actualizada hasta recibir el correo con el comprobante.',
 };
@@ -210,22 +214,25 @@ export const SEED_ANNOUNCEMENTS: Announcement[] = [
 
 // ---------------------------------------------------------------- integrantes
 
-// usualRole es provisional (la planilla no registra roles) — editar según
-// el rol real de cada integrante.
+// Nombres genéricos a propósito: la identidad real de cada integrante vive
+// en Supabase (players.name, vinculada a su cuenta) desde que se registra y
+// comandancia aprueba su solicitud. Este arreglo es solo el "puente" local
+// para todo lo que aún no está migrado (cuotas, eventos, roster de otros
+// integrantes) — no debe llevar datos personales reales en un repo público.
 export const PLAYERS: Player[] = [
-  { id: '1b9', callsign: '1B9', name: 'Integrante', rank: 'Veterano', status: 'activo', usualRole: 'Squad Leader', isAdmin: true, joinedAt: '2021-02-01' },
-  { id: '2b9', callsign: '2B9', name: 'Integrante', rank: 'Titular', status: 'activo', usualRole: 'LMG', isAdmin: false, joinedAt: '2024-02-01' },
-  { id: '3b9', callsign: '3B9', name: 'Integrante', rank: 'Veterano', status: 'activo', usualRole: 'Sniper', isAdmin: false, joinedAt: '2021-02-01' },
-  { id: '4b9', callsign: '4B9', name: 'Integrante', rank: 'Veterano', status: 'activo', usualRole: 'Rifleman', isAdmin: false, joinedAt: '2021-02-01' },
-  { id: '5b9', callsign: '5B9', name: 'Integrante', rank: 'Veterano', status: 'activo', usualRole: 'Radio Operator', isAdmin: false, joinedAt: '2021-02-01' },
-  { id: '6b9', callsign: '6B9', name: 'Integrante', rank: 'Veterano', status: 'receso', usualRole: 'Rifleman', isAdmin: false, joinedAt: '2021-02-01' },
-  { id: '7b9', callsign: '7B9', name: 'Integrante', rank: 'Veterano', status: 'activo', usualRole: 'DMR', isAdmin: false, joinedAt: '2021-02-01' },
-  { id: '8b9', callsign: '8B9', name: 'Integrante', rank: 'Titular', status: 'activo', usualRole: 'Medic', isAdmin: false, joinedAt: '2022-01-01' },
-  { id: '9b9', callsign: '9B9', name: 'Integrante', rank: 'Titular', status: 'activo', usualRole: 'Grenadier', isAdmin: false, joinedAt: '2023-09-01' },
-  { id: '10b9', callsign: '10B9', name: 'Integrante', rank: 'Veterano', status: 'activo', usualRole: 'Team Leader', isAdmin: false, joinedAt: '2021-02-01' },
-  { id: '12b9', callsign: '12B9', name: 'Integrante', rank: 'Titular', status: 'activo', usualRole: 'Squad Leader', isAdmin: true, joinedAt: '2024-01-01' },
-  { id: '13b9', callsign: '13B9', name: 'Integrante', rank: 'Nuevo', status: 'activo', usualRole: 'Rifleman', isAdmin: false, joinedAt: '2026-01-01' },
-  { id: '14b9', callsign: '14B9', name: 'Integrante', rank: 'Nuevo', status: 'activo', usualRole: 'Rifleman', isAdmin: false, joinedAt: '2026-04-01' },
+  { id: '1b9', callsign: '1B9', name: 'Integrante 1B9', rank: 'Veterano', status: 'activo', usualRole: 'Squad Leader', isAdmin: true, joinedAt: '2021-02-01' },
+  { id: '2b9', callsign: '2B9', name: 'Integrante 2B9', rank: 'Titular', status: 'activo', usualRole: 'LMG', isAdmin: false, joinedAt: '2024-02-01' },
+  { id: '3b9', callsign: '3B9', name: 'Integrante 3B9', rank: 'Veterano', status: 'activo', usualRole: 'Sniper', isAdmin: false, joinedAt: '2021-02-01' },
+  { id: '4b9', callsign: '4B9', name: 'Integrante 4B9', rank: 'Veterano', status: 'activo', usualRole: 'Rifleman', isAdmin: false, joinedAt: '2021-02-01' },
+  { id: '5b9', callsign: '5B9', name: 'Integrante 5B9', rank: 'Veterano', status: 'activo', usualRole: 'Radio Operator', isAdmin: false, joinedAt: '2021-02-01' },
+  { id: '6b9', callsign: '6B9', name: 'Integrante 6B9', rank: 'Veterano', status: 'receso', usualRole: 'Rifleman', isAdmin: false, joinedAt: '2021-02-01' },
+  { id: '7b9', callsign: '7B9', name: 'Integrante 7B9', rank: 'Veterano', status: 'activo', usualRole: 'DMR', isAdmin: false, joinedAt: '2021-02-01' },
+  { id: '8b9', callsign: '8B9', name: 'Integrante 8B9', rank: 'Titular', status: 'activo', usualRole: 'Medic', isAdmin: false, joinedAt: '2022-01-01' },
+  { id: '9b9', callsign: '9B9', name: 'Integrante 9B9', rank: 'Titular', status: 'activo', usualRole: 'Grenadier', isAdmin: false, joinedAt: '2023-09-01' },
+  { id: '10b9', callsign: '10B9', name: 'Integrante 10B9', rank: 'Veterano', status: 'activo', usualRole: 'Team Leader', isAdmin: false, joinedAt: '2021-02-01' },
+  { id: '12b9', callsign: '12B9', name: 'Integrante 12B9', rank: 'Titular', status: 'activo', usualRole: 'Squad Leader', isAdmin: true, joinedAt: '2024-01-01' },
+  { id: '13b9', callsign: '13B9', name: 'Integrante 13B9', rank: 'Nuevo', status: 'activo', usualRole: 'Rifleman', isAdmin: false, joinedAt: '2026-01-01' },
+  { id: '14b9', callsign: '14B9', name: 'Integrante 14B9', rank: 'Nuevo', status: 'activo', usualRole: 'Rifleman', isAdmin: false, joinedAt: '2026-04-01' },
 ];
 
 // Usuario actual en modo demo
@@ -247,7 +254,7 @@ const DUES_2026: Record<string, { from: number; paid: number[] }> = {
   '3b9': { from: 0, paid: [0, 1] },             // ene–feb pagadas
   '4b9': { from: 3, paid: [] },                 // cuota corre desde abr
   '5b9': { from: 0, paid: [0, 1, 2, 3] },
-  // 6b9 Integrante: receso — sin cuotas
+  // 6b9: receso — sin cuotas
   '7b9': { from: 3, paid: [3, 4] },             // abr–may pagadas
   '8b9': { from: 0, paid: [0, 1, 2] },
   '9b9': { from: 0, paid: [0, 1, 2] },
@@ -409,29 +416,25 @@ export const EVENTS: GameEvent[] = [
 
 // ---------------------------------------------------------------- notas comandancia
 
-// Montos registrados en la planilla FEB 2026 (sección inferior hoja "2026").
-export const ADMIN_NOTES: Record<string, string> = {
-  '3b9': 'Nota de ejemplo.',
-  '4b9': 'Nota de ejemplo.',
-  '8b9': 'Nota de ejemplo.',
-  '9b9': 'Nota de ejemplo.',
-  '10b9': 'Nota de ejemplo.',
-  '6b9': 'Nota de ejemplo.',
-  '14b9': 'Nota de ejemplo.',
-};
+// Notas de ejemplo — las notas reales de comandancia se escriben desde la
+// app (Comandancia → ficha del integrante) y no deben quedar commiteadas en
+// un repo público, ya que suelen incluir información privada o financiera.
+export const ADMIN_NOTES: Record<string, string> = {};
 
 // ---------------------------------------------------------------- inventario
 
-// Hoja "Inventario" de la planilla.
+// Hoja "Inventario" de la planilla. Los responsables se dejan como "Bodega"
+// por defecto para no versionar a qué integrante específico se le prestó
+// cada artículo — eso se administra desde la app.
 export const INVENTORY: InventoryItem[] = [
-  { name: 'Mesa plegable 1.8 mts', qty: 1, holder: 'Integrante' },
+  { name: 'Mesa plegable 1.8 mts', qty: 1, holder: 'Bodega' },
   { name: 'Caja plástica para cachureos', qty: 2, holder: 'Bodega' },
   { name: 'Malla camuflada grande', qty: 1, holder: 'Bodega' },
   { name: 'Malla camuflada pequeña', qty: 1, holder: '—' },
   { name: 'Estufita de camping', qty: 1, holder: 'Bodega' },
   { name: 'Gas estufa chico', qty: 4, holder: 'Bodega', note: '1 en bodega' },
   { name: 'Carpa', qty: 1, holder: 'Bodega' },
-  { name: 'Cooler Coleman', qty: 1, holder: 'Integrante' },
+  { name: 'Cooler Coleman', qty: 1, holder: 'Bodega' },
   { name: 'Parrilla armable', qty: 1, holder: 'Bodega' },
   { name: 'Dron DJI Mavic Mini 2', qty: 1, holder: 'Bodega' },
   { name: 'Baterías dron', qty: 4, holder: 'Bodega' },
@@ -448,7 +451,7 @@ export const INVENTORY: InventoryItem[] = [
   { name: 'Trípode amarillo', qty: 1, holder: 'Bodega' },
   { name: 'Antena Sirius', qty: 1, holder: 'Bodega' },
   { name: 'Tela proyector', qty: 1, holder: 'Bodega' },
-  { name: 'Mochila', qty: 1, holder: 'Integrante' },
+  { name: 'Mochila', qty: 1, holder: 'Bodega' },
 ];
 
 // Hoja "Cotizaciones".
