@@ -223,6 +223,16 @@ create table if not exists public.announcements (
   created_at timestamptz not null default now()
 );
 
+-- Suscripciones a notificaciones push (una fila por dispositivo/navegador).
+create table if not exists public.push_subscriptions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users (id) on delete cascade,
+  endpoint text not null unique,
+  p256dh text not null,
+  auth_key text not null,
+  created_at timestamptz not null default now()
+);
+
 -- =============================================================================
 -- RLS
 -- =============================================================================
@@ -242,6 +252,7 @@ alter table public.admin_notes enable row level security;
 alter table public.team_inventory enable row level security;
 alter table public.procurements enable row level security;
 alter table public.announcements enable row level security;
+alter table public.push_subscriptions enable row level security;
 
 -- Helper: ¿el usuario actual es admin?
 create or replace function public.is_admin()
@@ -364,6 +375,11 @@ drop policy if exists ann_select on public.announcements;
 create policy ann_select on public.announcements for select to authenticated using (true);
 drop policy if exists ann_admin on public.announcements;
 create policy ann_admin on public.announcements for all to authenticated using (public.is_admin()) with check (public.is_admin());
+
+-- push_subscriptions: cada uno gestiona solo las suyas.
+drop policy if exists push_subs_own on public.push_subscriptions;
+create policy push_subs_own on public.push_subscriptions for all to authenticated
+  using (user_id = auth.uid()) with check (user_id = auth.uid());
 
 -- =============================================================================
 -- Storage — buckets y políticas

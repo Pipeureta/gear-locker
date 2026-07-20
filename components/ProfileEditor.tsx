@@ -5,13 +5,14 @@
 // comandancia. Guarda directo contra Supabase (players + Auth), a
 // diferencia del resto de la app que todavía vive en el store local.
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import ModalShell from '@/components/ModalShell';
 import { attendancePct, pastEvents, rolesForPlayer, ROLES, type PrimaryWeapon, type Role } from '@/lib/data';
 import { useCurrentPlayer } from '@/lib/store';
 import { useAuth } from '@/lib/auth-context';
 import { useGearChecklist } from '@/lib/gear-checklist';
 import { createClient } from '@/lib/supabase/client';
+import { getPushSubscription, pushSupported, sendTestPush, subscribeToPush } from '@/lib/push';
 
 export default function ProfileEditor({ onClose }: { onClose: () => void }) {
   const player = useCurrentPlayer();
@@ -31,10 +32,40 @@ export default function ProfileEditor({ onClose }: { onClose: () => void }) {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [passwordMsg, setPasswordMsg] = useState<{ text: string; ok: boolean } | null>(null);
   const [passwordBusy, setPasswordBusy] = useState(false);
+  const [pushEnabled, setPushEnabled] = useState(false);
+  const [pushBusy, setPushBusy] = useState(false);
+  const [pushMsg, setPushMsg] = useState<{ text: string; ok: boolean } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const attendance = attendancePct(player.id);
   const history = pastEvents();
   const attended = history.filter((event) => event.attended?.includes(player.id)).length;
+
+  useEffect(() => {
+    getPushSubscription().then((sub) => setPushEnabled(!!sub));
+  }, []);
+
+  const enablePush = async () => {
+    setPushBusy(true);
+    setPushMsg(null);
+    const { error } = await subscribeToPush();
+    setPushBusy(false);
+    if (error) {
+      setPushMsg({ text: error, ok: false });
+      return;
+    }
+    setPushEnabled(true);
+    setPushMsg({ text: 'Notificaciones activadas en este dispositivo.', ok: true });
+  };
+
+  const testPush = async () => {
+    setPushBusy(true);
+    setPushMsg(null);
+    const { error } = await sendTestPush();
+    setPushBusy(false);
+    setPushMsg(
+      error ? { text: error, ok: false } : { text: 'Notificación enviada — revisa este dispositivo.', ok: true },
+    );
+  };
 
   const pickPhoto = (f: File | undefined) => {
     if (!f) return;
@@ -229,6 +260,38 @@ export default function ProfileEditor({ onClose }: { onClose: () => void }) {
             <span className="tiny mut">
               {gearChecklist.filter((i) => gear[i]).length}/{gearChecklist.length} items — recuerda Guardar cambios.
             </span>
+          )}
+        </div>
+
+        <div className="profile-gear">
+          <div className="panel-head"><h3>Notificaciones</h3></div>
+          {!pushSupported() ? (
+            <span className="help">Este navegador no soporta notificaciones push.</span>
+          ) : (
+            <>
+              <span className="help">
+                Actívalas en este dispositivo para recibir avisos de comandancia (eventos nuevos, recordatorios).
+              </span>
+              <div className="row">
+                {!pushEnabled ? (
+                  <button className="lat-btn ghost sm" type="button" onClick={enablePush} disabled={pushBusy}>
+                    {pushBusy ? 'Activando...' : 'Activar notificaciones'}
+                  </button>
+                ) : (
+                  <>
+                    <span className="lat-chip ok">✔ Activadas en este dispositivo</span>
+                    <button className="lat-btn ghost sm" type="button" onClick={testPush} disabled={pushBusy}>
+                      {pushBusy ? 'Enviando...' : 'Enviar notificación de prueba'}
+                    </button>
+                  </>
+                )}
+              </div>
+              {pushMsg && (
+                <div className={`lat-alert ${pushMsg.ok ? 'ok' : 'warn'}`}>
+                  <span className="help">{pushMsg.text}</span>
+                </div>
+              )}
+            </>
           )}
         </div>
 
