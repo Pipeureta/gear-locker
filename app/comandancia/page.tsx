@@ -105,6 +105,8 @@ export default function ComandanciaPage() {
   const [requests, setRequests] = useState<RegistrationRequestRow[]>([]);
   const [requestsError, setRequestsError] = useState<string | null>(null);
   const [busyRequestId, setBusyRequestId] = useState<string | null>(null);
+  const [unclaimed, setUnclaimed] = useState<{ id: string; callsign: string; name: string }[]>([]);
+  const [linkChoice, setLinkChoice] = useState<Record<string, string>>({});
 
   const loadRequests = async () => {
     if (!player.isAdmin) return;
@@ -119,6 +121,8 @@ export default function ComandanciaPage() {
     }
     setRequests((data as RegistrationRequestRow[]) ?? []);
     setRequestsError(null);
+    const { data: free } = await supabase.from('players').select('id, callsign, name').is('user_id', null);
+    setUnclaimed(free ?? []);
   };
 
   useEffect(() => {
@@ -132,8 +136,9 @@ export default function ComandanciaPage() {
   const approveRequest = async (req: RegistrationRequestRow) => {
     setBusyRequestId(req.id);
     const supabase = createClient();
+    const chosen = linkChoice[req.id] ?? req.matched_player_id ?? 'new';
 
-    if (req.matched_player_id) {
+    if (chosen !== 'new') {
       const { error } = await supabase
         .from('players')
         .update({
@@ -143,13 +148,14 @@ export default function ComandanciaPage() {
           phone: req.phone,
           photo_url: req.photo_url,
         })
-        .eq('id', req.matched_player_id);
+        .eq('id', chosen);
       if (error) {
         setBusyRequestId(null);
         setRequestsError('No se pudo vincular la ficha: ' + error.message);
         return;
       }
-      const local = localMatchByCallsign(req.callsign);
+      const targetCallsign = unclaimed.find((u) => u.id === chosen)?.callsign ?? req.callsign;
+      const local = localMatchByCallsign(targetCallsign);
       if (local) {
         updatePlayer(local.id, {
           name: req.name,
@@ -407,10 +413,8 @@ export default function ComandanciaPage() {
           )}
           <div className="grid cols-2">
             {requests.map((r) => {
-              const matchedPlayer = r.matched_player_id
-                ? players.find((p) => p.callsign.toLowerCase() === r.callsign.toLowerCase())
-                : undefined;
               const busy = busyRequestId === r.id;
+              const choice = linkChoice[r.id] ?? r.matched_player_id ?? 'new';
               return (
               <div key={r.id} className="lat-panel">
                 <div className="roster-card">
@@ -423,15 +427,27 @@ export default function ComandanciaPage() {
                     <div className="rc-sub dim-t">Solicitado el {fmtDate(r.requested_at.slice(0, 10))}</div>
                   </div>
                 </div>
-                <div className={`lat-alert ${r.matched_player_id ? 'ok' : 'warn'}`}>
-                  <div className="alert-title">Destino de la solicitud</div>
-                  {r.matched_player_id
-                    ? `Se vinculará con la ficha existente ${matchedPlayer?.callsign ?? r.callsign} · ${matchedPlayer?.name ?? ''}. Se conservarán su rango, rol, estado, antigüedad y acceso.`
-                    : 'No existe una ficha sin reclamar con este callsign. Al aprobar se creará un integrante nuevo.'}
+                <div className="lat-field">
+                  <label>Vincular con</label>
+                  <select
+                    className="lat-select"
+                    value={choice}
+                    onChange={(e) => setLinkChoice((prev) => ({ ...prev, [r.id]: e.target.value }))}
+                  >
+                    <option value="new">— Crear ficha nueva —</option>
+                    {unclaimed.map((u) => (
+                      <option key={u.id} value={u.id}>{u.callsign} · {u.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className={`lat-alert ${choice !== 'new' ? 'ok' : 'warn'}`}>
+                  {choice !== 'new'
+                    ? `Se vinculará con la ficha existente. Se conservarán su rango, rol, estado, antigüedad y acceso.`
+                    : 'Al aprobar se creará un integrante nuevo.'}
                 </div>
                 <div className="row">
                   <button className="lat-btn ok-line" disabled={busy} onClick={() => approveRequest(r)}>
-                    {busy ? 'Procesando...' : r.matched_player_id ? '✓ Aprobar y vincular' : '✓ Aprobar y crear ficha'}
+                    {busy ? 'Procesando...' : choice !== 'new' ? '✓ Aprobar y vincular' : '✓ Aprobar y crear ficha'}
                   </button>
                   <button className="lat-btn danger" disabled={busy} onClick={() => rejectRequest(r)}>
                     ✗ Rechazar
