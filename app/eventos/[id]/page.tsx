@@ -1,11 +1,16 @@
 'use client';
 
-import { use, useRef, useState } from 'react';
+import { use, useEffect, useRef, useState } from 'react';
 import ModalShell from '@/components/ModalShell';
 import Link from 'next/link';
 import { daysUntil, fmtDate, rolesForPlayer, type RsvpStatus } from '@/lib/data';
 import { useCurrentPlayer, useStore } from '@/lib/store';
-import { fileToDataUrl, fmtBytes } from '@/lib/img';
+import {
+  getEventFileUrls,
+  removeEventFileFromStorage,
+  uploadEventFile,
+} from '@/lib/supabase/event-files';
+import { fmtBytes } from '@/lib/img';
 
 const RSVP_LABEL: Record<RsvpStatus, string> = {
   va: '✓ Voy',
@@ -14,6 +19,10 @@ const RSVP_LABEL: Record<RsvpStatus, string> = {
 };
 
 const FILE_ICO: Record<string, string> = { mapa: '▦', documento: '▤', imagen: '▣' };
+
+function isPdf(name: string): boolean {
+  return name.toLowerCase().endsWith('.pdf');
+}
 
 export default function BriefingPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -24,8 +33,32 @@ export default function BriefingPage({ params }: { params: Promise<{ id: string 
   const fileRef = useRef<HTMLInputElement>(null);
   const photoRef = useRef<HTMLInputElement>(null);
   const [upMsg, setUpMsg] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
   const [lightbox, setLightbox] = useState<string | null>(null);
+  const [pdfPreview, setPdfPreview] = useState<{ name: string; url: string } | null>(null);
   const [editingResponse, setEditingResponse] = useState(false);
+  const [urls, setUrls] = useState<Record<string, string>>({});
+
+  const uploads = event ? eventUploads.filter((f) => f.eventId === event.id) : [];
+  const photos = uploads.filter((f) => f.kind === 'imagen');
+  const docs = uploads.filter((f) => f.kind !== 'imagen');
+
+  // Las URLs firmadas vencen (1 hora) — se piden de nuevo cada vez que
+  // cambia la lista de archivos del evento.
+  useEffect(() => {
+    if (uploads.length === 0) {
+      setUrls({});
+      return;
+    }
+    let active = true;
+    getEventFileUrls(uploads.map((f) => f.storagePath)).then((map) => {
+      if (active) setUrls(map);
+    });
+    return () => {
+      active = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [uploads.map((f) => f.storagePath).join(',')]);
 
   if (!event) {
     return (
@@ -42,29 +75,41 @@ export default function BriefingPage({ params }: { params: Promise<{ id: string 
   const notGoing = Object.entries(eventRsvps).filter(([, s]) => s === 'no-va').map(([pid]) => pid);
   const isPast = daysUntil(event.date) < 0;
 
-  const uploads = eventUploads.filter((f) => f.eventId === event.id);
-  const photos = uploads.filter((f) => f.kind === 'imagen');
-  const docs = uploads.filter((f) => f.kind !== 'imagen');
-
   const squads = [...new Set(event.assignments.map((a) => a.squad))];
   const mapsUrl = `https://maps.google.com/?q=${encodeURIComponent(event.mapsQuery)}`;
 
-  const upload = async (f: File | undefined, forcePhoto: boolean) => {
+  const upload = async (f: File | undefined, kind: 'imagen' | 'documento') => {
     if (!f) return;
+    setUploading(true);
+    setUpMsg(null);
     try {
-      const isImage = f.type.startsWith('image/');
-      const dataUrl = await fileToDataUrl(f, forcePhoto ? 1600 : 1200);
+      const { path } = await uploadEventFile(event.id, f);
       addEventUpload({
         eventId: event.id,
         name: f.name,
-        kind: isImage ? 'imagen' : f.name.toLowerCase().includes('mapa') ? 'mapa' : 'documento',
-        dataUrl,
+        kind: kind === 'imagen' ? 'imagen' : f.name.toLowerCase().includes('mapa') ? 'mapa' : 'documento',
+        storagePath: path,
         size: fmtBytes(f.size),
+        uploadedAt: new Date().toISOString(),
       });
-      setUpMsg(null);
     } catch (err) {
       setUpMsg(err instanceof Error ? err.message : 'No se pudo subir el archivo.');
+    } finally {
+      setUploading(false);
     }
+  };
+
+  const removeUpload = async (fileId: string, storagePath: string) => {
+    if (!confirm('¿Eliminar este archivo? No se puede deshacer.')) return;
+    await removeEventFileFromStorage(storagePath);
+    removeEventUpload(fileId);
+  };
+
+  const openDoc = (f: (typeof uploads)[number]) => {
+    const url = urls[f.storagePath];
+    if (!url) return;
+    if (isPdf(f.name)) setPdfPreview({ name: f.name, url });
+    else window.open(url, '_blank', 'noreferrer');
   };
 
   return (
@@ -152,32 +197,39 @@ export default function BriefingPage({ params }: { params: Promise<{ id: string 
           ))}
         </div>
 
-        {/* Documentos */}
+        {/* Archivos importantes */}
         <div className="lat-panel">
           <div className="panel-head">
-            <h3>Mapas y documentos</h3>
+            <h3>Archivos importantes</h3>
             {player.isAdmin && (
-              <button className="lat-btn ghost sm" onClick={() => fileRef.current?.click()}>+ Subir</button>
+              <button className="lat-btn ghost sm" disabled={uploading} onClick={() => fileRef.current?.click()}>
+                {uploading ? 'Subiendo...' : '+ Subir'}
+              </button>
             )}
           </div>
-          {event.files.length === 0 && docs.length === 0 && (
+          <span className="help">Mapas, órdenes de operación, reglas y cualquier documento que el equipo deba revisar o descargar.</span>
+          {docs.length === 0 && (
             <div className="empty-state">Aún no hay documentos. Comandancia los sube antes del evento.</div>
           )}
-          {event.files.map((f) => (
-            <div key={f.id} className="row between small" style={{ padding: '4px 0', borderBottom: '1px dashed rgba(255,255,255,0.05)' }}>
-              <span><span className="acc">{FILE_ICO[f.kind]}</span> {f.name} <span className="tiny dim-t">(ejemplo)</span></span>
-              <span className="tiny mut">{f.size}</span>
-            </div>
-          ))}
           {docs.map((f) => (
             <div key={f.id} className="row between small" style={{ padding: '4px 0', borderBottom: '1px dashed rgba(255,255,255,0.05)' }}>
               <span><span className="acc">{FILE_ICO[f.kind]}</span> {f.name}</span>
               <span className="row" style={{ gap: 4 }}>
                 <span className="tiny mut">{f.size}</span>
-                <a className="lat-btn ghost sm" href={f.dataUrl} target="_blank" rel="noreferrer">Ver</a>
-                <a className="lat-btn ghost sm" href={f.dataUrl} download={f.name}>⇓</a>
+                <button className="lat-btn ghost sm" disabled={!urls[f.storagePath]} onClick={() => openDoc(f)}>
+                  {isPdf(f.name) ? 'Ver' : 'Abrir'}
+                </button>
+                <a
+                  className="lat-btn ghost sm"
+                  href={urls[f.storagePath] ?? undefined}
+                  download={f.name}
+                  aria-disabled={!urls[f.storagePath]}
+                  onClick={(e) => { if (!urls[f.storagePath]) e.preventDefault(); }}
+                >
+                  ⇓
+                </a>
                 {player.isAdmin && (
-                  <button className="lat-btn danger sm" onClick={() => removeEventUpload(f.id)}>✗</button>
+                  <button className="lat-btn danger sm" onClick={() => removeUpload(f.id, f.storagePath)}>✗</button>
                 )}
               </span>
             </div>
@@ -185,9 +237,9 @@ export default function BriefingPage({ params }: { params: Promise<{ id: string 
           <input
             ref={fileRef}
             type="file"
-            accept="image/*,.pdf,.kml,.gpx"
+            accept="image/*,.pdf,.kml,.gpx,.zip"
             style={{ display: 'none' }}
-            onChange={(e) => { upload(e.target.files?.[0], false); e.target.value = ''; }}
+            onChange={(e) => { upload(e.target.files?.[0], 'documento'); e.target.value = ''; }}
           />
           {upMsg && <div className="lat-alert warn"><span className="help">{upMsg}</span></div>}
         </div>
@@ -242,24 +294,32 @@ export default function BriefingPage({ params }: { params: Promise<{ id: string 
         </div>
       </div>
 
-      {/* Fotos */}
-      <div className="section-title">Fotos del evento</div>
+      {/* Intel (fotos) */}
+      <div className="section-title">Intel (fotos)</div>
       <div className="lat-panel">
         {player.isAdmin && (
           <div className="row between">
-            <span className="help">Sube fotos del terreno, del briefing o del evento — todo el equipo puede verlas y descargarlas.</span>
-            <button className="lat-btn ghost sm" onClick={() => photoRef.current?.click()}>+ Subir foto</button>
+            <span className="help">Fotos tomadas durante o después del evento — terreno, contacto, resultados. No es para mapas ni documentos, eso va en Archivos importantes.</span>
+            <button className="lat-btn ghost sm" disabled={uploading} onClick={() => photoRef.current?.click()}>
+              {uploading ? 'Subiendo...' : '+ Subir foto'}
+            </button>
           </div>
         )}
         {photos.length === 0 ? (
           <div className="empty-state">
-            Todavía no hay fotos. {player.isAdmin ? 'Usa "Subir foto" para agregar la primera.' : 'Comandancia puede subir fotos del terreno o del evento.'}
+            Todavía no hay fotos. {player.isAdmin ? 'Usa "Subir foto" durante o después del evento.' : 'Comandancia sube el intel del terreno acá.'}
           </div>
         ) : (
           <div className="gallery">
             {photos.map((f) => (
-              <button key={f.id} className="g-item" onClick={() => setLightbox(f.dataUrl)} title={f.name}>
-                <img src={f.dataUrl} alt={f.name} />
+              <button
+                key={f.id}
+                className="g-item"
+                disabled={!urls[f.storagePath]}
+                onClick={() => setLightbox(urls[f.storagePath] ?? null)}
+                title={f.name}
+              >
+                {urls[f.storagePath] && <img src={urls[f.storagePath]} alt={f.name} />}
               </button>
             ))}
           </div>
@@ -269,7 +329,7 @@ export default function BriefingPage({ params }: { params: Promise<{ id: string 
           type="file"
           accept="image/*"
           style={{ display: 'none' }}
-          onChange={(e) => { upload(e.target.files?.[0], true); e.target.value = ''; }}
+          onChange={(e) => { upload(e.target.files?.[0], 'imagen'); e.target.value = ''; }}
         />
       </div>
 
@@ -352,6 +412,21 @@ export default function BriefingPage({ params }: { params: Promise<{ id: string 
               <a className="lat-btn" href={lightbox} download="foto-evento.jpg">⇓ Descargar</a>
               <button className="lat-btn ghost" onClick={() => setLightbox(null)}>Cerrar</button>
             </div>
+        </ModalShell>
+      )}
+
+      {pdfPreview && (
+        <ModalShell onClose={() => setPdfPreview(null)} style={{ maxWidth: 900, width: '95vw' }}>
+          <h2>{pdfPreview.name}</h2>
+          <iframe
+            src={pdfPreview.url}
+            title={pdfPreview.name}
+            style={{ width: '100%', height: '70vh', border: '1px solid var(--border)', background: '#fff' }}
+          />
+          <div className="row" style={{ justifyContent: 'flex-end' }}>
+            <a className="lat-btn" href={pdfPreview.url} download={pdfPreview.name}>⇓ Descargar</a>
+            <button className="lat-btn ghost" onClick={() => setPdfPreview(null)}>Cerrar</button>
+          </div>
         </ModalShell>
       )}
     </>

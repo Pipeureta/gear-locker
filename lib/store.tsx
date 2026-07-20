@@ -46,8 +46,11 @@ export interface UploadedEventFile {
   eventId: string;
   name: string;
   kind: 'mapa' | 'documento' | 'imagen';
-  dataUrl: string;
+  // Ruta dentro del bucket privado 'event-files' de Supabase Storage — no
+  // es una URL directa, hay que pedir una firmada para ver/descargar.
+  storagePath: string;
   size: string;
+  uploadedAt: string; // ISO date — para distinguir intel "durante/después" del evento
 }
 
 interface StoreState {

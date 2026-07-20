@@ -304,11 +304,7 @@ export const EVENTS: GameEvent[] = [
       'Hidratación: mínimo 3L por persona',
       'Dead rag y protección ocular full-seal obligatorios',
     ],
-    files: [
-      { id: 'f1', name: 'mapa_op_tormenta_v2.pdf', kind: 'mapa', size: '4.2 MB', url: '#' },
-      { id: 'f2', name: 'orden_de_operaciones.pdf', kind: 'documento', size: '1.1 MB', url: '#' },
-      { id: 'f3', name: 'reglas_milsim_organizador.pdf', kind: 'documento', size: '890 KB', url: '#' },
-    ],
+    files: [],
     comms: [
       { squad: 'Comando', channel: 'CH 1', freq: '446.006 MHz', notes: 'Solo SL/TL' },
       { squad: 'Alpha', channel: 'CH 3', freq: '446.031 MHz' },
@@ -343,7 +339,7 @@ export const EVENTS: GameEvent[] = [
       { role: 'Pistola', max: 330 },
     ],
     reminders: ['Llegar 09:00 para chrono', 'Cancha techada — no se suspende por lluvia'],
-    files: [{ id: 'f4', name: 'layout_cqb.png', kind: 'mapa', size: '2.0 MB', url: '#' }],
+    files: [],
     comms: [{ squad: 'General', channel: 'CH 2', freq: '446.018 MHz' }],
     assignments: [],
   },
