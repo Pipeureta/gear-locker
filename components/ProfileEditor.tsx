@@ -6,13 +6,15 @@
 
 import { useRef, useState } from 'react';
 import ModalShell from '@/components/ModalShell';
-import { attendancePct, pastEvents, rolesForPlayer } from '@/lib/data';
+import { attendancePct, pastEvents, rolesForPlayer, ROLES, type PrimaryWeapon, type Role } from '@/lib/data';
 import { useCurrentPlayer, useStore } from '@/lib/store';
 import { imageToDataUrl } from '@/lib/img';
 
 export default function ProfileEditor({ onClose }: { onClose: () => void }) {
   const player = useCurrentPlayer();
-  const { updatePlayer, players, changePassword } = useStore();
+  const { updatePlayer, players, changePassword, gearChecklist } = useStore();
+  const [primaries, setPrimaries] = useState<PrimaryWeapon[]>(player.primaries ?? []);
+  const [gear, setGear] = useState<Record<string, boolean>>(player.gear ?? {});
   const [name, setName] = useState(player.name);
   const [callsign, setCallsign] = useState(player.callsign);
   const [nickname, setNickname] = useState(player.nickname ?? '');
@@ -54,9 +56,18 @@ export default function ProfileEditor({ onClose }: { onClose: () => void }) {
       nickname: nickname.trim() || undefined,
       phone: phone.trim() || undefined,
       photoUrl,
+      primaries: primaries
+        .map((p) => ({ ...p, name: p.name.trim() }))
+        .filter((p) => p.name),
+      gear,
     });
     setMsg(null);
     setSaved(true);
+  };
+
+  const setPrimary = (index: number, patch: Partial<PrimaryWeapon>) => {
+    setPrimaries((prev) => prev.map((p, i) => (i === index ? { ...p, ...patch } : p)));
+    setSaved(false);
   };
 
   const savePassword = () => {
@@ -130,6 +141,66 @@ export default function ProfileEditor({ onClose }: { onClose: () => void }) {
           <div className="kv"><span className="k">Rango</span><span className="v">{player.rank}</span></div>
           <div className="kv"><span className="k">Roles habituales</span><span className="v">{rolesForPlayer(player).join(' · ')}</span></div>
           <div className="kv"><span className="k">En el equipo desde</span><span className="v">{player.joinedAt.slice(0, 7)}</span></div>
+        </div>
+
+        <div className="profile-gear">
+          <div className="panel-head"><h3>Mis primarias</h3></div>
+          <span className="help">Registra tus réplicas primarias y el rol con el que usas cada una.</span>
+          {primaries.length === 0 && (
+            <div className="empty-state">Aún no registras primarias. Agrega la primera. 🔫</div>
+          )}
+          {primaries.map((p, i) => (
+            <div key={i} className="primary-row">
+              <input
+                className="lat-input"
+                value={p.name}
+                onChange={(e) => setPrimary(i, { name: e.target.value })}
+                placeholder="Ej: M4 Specna Arsenal SA-E20"
+              />
+              <select
+                className="lat-select"
+                value={p.role}
+                onChange={(e) => setPrimary(i, { role: e.target.value as Role })}
+              >
+                {ROLES.map((r) => <option key={r}>{r}</option>)}
+              </select>
+              <button
+                className="lat-btn danger sm"
+                type="button"
+                title="Quitar esta primaria"
+                onClick={() => { setPrimaries((prev) => prev.filter((_, x) => x !== i)); setSaved(false); }}
+              >
+                ✗
+              </button>
+            </div>
+          ))}
+          <button
+            className="lat-btn ghost sm"
+            type="button"
+            onClick={() => { setPrimaries((prev) => [...prev, { name: '', role: 'Rifleman' }]); setSaved(false); }}
+          >
+            + Agregar primaria
+          </button>
+        </div>
+
+        <div className="profile-gear">
+          <div className="panel-head"><h3>Mi equipo personal</h3></div>
+          <span className="help">Marca lo que ya tienes. La lista la define comandancia.</span>
+          <div className="gear-grid">
+            {gearChecklist.map((item) => (
+              <label key={item} className={`gear-check${gear[item] ? ' on' : ''}`}>
+                <input
+                  type="checkbox"
+                  checked={!!gear[item]}
+                  onChange={(e) => { setGear((prev) => ({ ...prev, [item]: e.target.checked })); setSaved(false); }}
+                />
+                <span>{item}</span>
+              </label>
+            ))}
+          </div>
+          <span className="tiny mut">
+            {gearChecklist.filter((i) => gear[i]).length}/{gearChecklist.length} items — recuerda Guardar cambios.
+          </span>
         </div>
 
         <div className="profile-password">

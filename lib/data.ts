@@ -55,7 +55,33 @@ export interface Player {
     radio?: string;
     camo?: string;
   };
+  // Réplicas primarias registradas por el propio integrante, cada una con el
+  // rol para el que la usa.
+  primaries?: PrimaryWeapon[];
+  // Checklist de equipo personal: item -> lo tiene o no. La lista de items la
+  // administra comandancia (gearChecklist en el store).
+  gear?: Record<string, boolean>;
 }
+
+export interface PrimaryWeapon {
+  name: string;
+  role: Role;
+}
+
+// Lista inicial de equipo personal. Comandancia puede agregar o quitar items
+// desde la pestaña Equipo; cada integrante marca lo que tiene en Mi perfil.
+export const DEFAULT_GEAR_CHECKLIST: string[] = [
+  'Protección ocular full-seal',
+  'Dead rag',
+  'Radio',
+  'Chaleco táctico / plate carrier',
+  'Casco',
+  'Uniforme del equipo',
+  'Botiquín personal (IFAK)',
+  'Hidratación (camelback)',
+  'Baterías de repuesto',
+  'Linterna',
+];
 
 export interface Due {
   playerId: string;

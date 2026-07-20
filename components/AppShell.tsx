@@ -33,7 +33,7 @@ function isActive(pathname: string, href: string): boolean {
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const player = useCurrentPlayer();
-  const { adminView, setAdminView, sessionPlayerId, logout } = useStore();
+  const { sessionPlayerId, logout } = useStore();
   const [profileOpen, setProfileOpen] = useState(false);
 
   // Registro del service worker para modo PWA/offline.
@@ -95,15 +95,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 <span className="tiny dim-t">{player.callsign} · Mi perfil ✎</span>
               </span>
             </button>
-            {player.isAdmin && (
-              <button
-                className={`lat-btn sm ${adminView ? 'active-warn' : 'ghost'}`}
-                onClick={() => setAdminView(!adminView)}
-                title="Alterna entre vista integrante y vista comandancia"
-              >
-                {adminView ? '✦ Vista admin ON' : 'Vista admin OFF'}
-              </button>
-            )}
             <button className="lat-btn ghost sm" onClick={logout}>⏻ Cerrar sesión</button>
           </div>
         </aside>
@@ -114,8 +105,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               <span className="crumb">TSD /</span> {current?.label ?? 'Briefing'}
             </div>
             <div className="row">
-              <span className="lat-chip ok" title="Los datos se guardan en este dispositivo hasta conectar Supabase">
-                <span className="dot" /> Demo
+              <span className="lat-chip ok" title="App en línea — los datos se guardan por dispositivo hasta conectar Supabase">
+                <span className="dot" /> Live
               </span>
               <button
                 className="avatar sm avatar-btn"

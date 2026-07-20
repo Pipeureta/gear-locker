@@ -45,7 +45,7 @@ function PlayerCard({ player, onOpen }: { player: Player; onOpen: () => void }) 
 }
 
 export default function RosterPage() {
-  const { adminView, players, playerById } = useStore();
+  const { players, playerById } = useStore();
   const currentPlayer = useCurrentPlayer();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selected = selectedId ? playerById(selectedId) : undefined;
@@ -61,7 +61,6 @@ export default function RosterPage() {
         <span className="tiny mut">
           {active.length} integrantes activos{receso.length > 0 && ` · ${receso.length} en receso`}
         </span>
-        {adminView && currentPlayer.isAdmin && <span className="lat-chip warn"><span className="dot" /> Vista comandancia</span>}
       </div>
       <div className="grid cols-3">
         {[...active, ...receso].map((player) => (

@@ -30,7 +30,9 @@ export default function ComandanciaPage() {
     addPlayer, updatePlayer, removePlayer, adminNotes,
     setDuePaid, collectionAdjustment, setCollectionTotal,
     events, addEvent, updateEvent, removeEvent,
+    gearChecklist, addGearItem, removeGearItem,
   } = useStore();
+  const [newGearItem, setNewGearItem] = useState('');
 
   const [annTitle, setAnnTitle] = useState('');
   const [annBody, setAnnBody] = useState('');
@@ -120,12 +122,12 @@ export default function ComandanciaPage() {
 
       <div className="seg-tabs command-tabs" role="tablist" aria-label="Secciones de comandancia">
         <button className={activeTab === 'resumen' ? 'active' : ''} onClick={() => setActiveTab('resumen')} role="tab">
-          Resumen {registrations.length + passwordResets.filter((item) => item.status === 'pendiente').length > 0 && (
-            <span className="badge">{registrations.length + passwordResets.filter((item) => item.status === 'pendiente').length}</span>
-          )}
+          Resumen
         </button>
         <button className={activeTab === 'equipo' ? 'active' : ''} onClick={() => setActiveTab('equipo')} role="tab">
-          Equipo
+          Equipo {registrations.length + passwordResets.filter((item) => item.status === 'pendiente').length > 0 && (
+            <span className="badge">{registrations.length + passwordResets.filter((item) => item.status === 'pendiente').length}</span>
+          )}
         </button>
         <button className={activeTab === 'eventos' ? 'active' : ''} onClick={() => setActiveTab('eventos')} role="tab">
           Eventos
@@ -215,9 +217,14 @@ export default function ComandanciaPage() {
       </div>
 
       {/* --------------------------------------------------- solicitudes */}
-      {activeTab === 'resumen' && registrations.length > 0 && (
+      {activeTab === 'equipo' && (
         <>
           <div className="section-title">Solicitudes de ingreso</div>
+          {registrations.length === 0 && (
+            <div className="empty-state" style={{ marginBottom: 14 }}>
+              No hay solicitudes pendientes. Cuando alguien se registre en la app, aparecerá aquí para que la apruebes o rechaces.
+            </div>
+          )}
           <div className="grid cols-2">
             {registrations.map((r) => {
               const matchedPlayer = players.find(
@@ -256,7 +263,7 @@ export default function ComandanciaPage() {
         </>
       )}
 
-      {activeTab === 'resumen' && passwordResets.length > 0 && (
+      {activeTab === 'equipo' && passwordResets.length > 0 && (
         <>
           <div className="section-title">Recuperación de contraseñas</div>
           <div className="grid cols-2">
@@ -446,6 +453,54 @@ export default function ComandanciaPage() {
               ))}
             </tbody>
           </table>
+        </div>
+      </div>
+
+      {/* --------------------------------------------------- checklist de equipo */}
+      <div className="section-title">Checklist de equipo personal</div>
+      <div className="lat-panel">
+        <span className="help">
+          Esta lista aparece en el perfil de cada integrante para que marque qué tiene. Agrega o quita items según el estándar del equipo.
+        </span>
+        <div className="gear-grid">
+          {gearChecklist.map((item) => {
+            const haveCount = players.filter((p) => p.status === 'activo' && p.gear?.[item]).length;
+            return (
+              <span key={item} className="gear-check readonly on" style={{ justifyContent: 'space-between' }}>
+                <span>{item}</span>
+                <span className="row" style={{ gap: 6, flexWrap: 'nowrap' }}>
+                  <span className="tiny mut" title="Integrantes activos que lo tienen">{haveCount}/{active.length}</span>
+                  <button
+                    className="cr-btn"
+                    style={{ minHeight: 22, padding: '1px 7px' }}
+                    title="Quitar de la lista"
+                    onClick={() => {
+                      if (confirm(`¿Quitar "${item}" de la checklist de todo el equipo?`)) removeGearItem(item);
+                    }}
+                  >
+                    ✗
+                  </button>
+                </span>
+              </span>
+            );
+          })}
+        </div>
+        <div className="row">
+          <input
+            className="lat-input"
+            style={{ maxWidth: 320 }}
+            value={newGearItem}
+            onChange={(e) => setNewGearItem(e.target.value)}
+            placeholder="Ej: Guantes tácticos"
+            onKeyDown={(e) => { if (e.key === 'Enter') { addGearItem(newGearItem); setNewGearItem(''); } }}
+          />
+          <button
+            className="lat-btn"
+            disabled={!newGearItem.trim()}
+            onClick={() => { addGearItem(newGearItem); setNewGearItem(''); }}
+          >
+            + Agregar item
+          </button>
         </div>
       </div>
 

@@ -18,7 +18,7 @@ const FILE_ICO: Record<string, string> = { mapa: '▦', documento: '▤', imagen
 export default function BriefingPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const player = useCurrentPlayer();
-  const { rsvps, setRsvp, adminView, playerById, eventUploads, addEventUpload, removeEventUpload, events } = useStore();
+  const { rsvps, setRsvp, playerById, eventUploads, addEventUpload, removeEventUpload, events } = useStore();
   const event = events.find((item) => item.id === id);
 
   const fileRef = useRef<HTMLInputElement>(null);
@@ -156,7 +156,7 @@ export default function BriefingPage({ params }: { params: Promise<{ id: string 
         <div className="lat-panel">
           <div className="panel-head">
             <h3>Mapas y documentos</h3>
-            {adminView && (
+            {player.isAdmin && (
               <button className="lat-btn ghost sm" onClick={() => fileRef.current?.click()}>+ Subir</button>
             )}
           </div>
@@ -176,7 +176,7 @@ export default function BriefingPage({ params }: { params: Promise<{ id: string 
                 <span className="tiny mut">{f.size}</span>
                 <a className="lat-btn ghost sm" href={f.dataUrl} target="_blank" rel="noreferrer">Ver</a>
                 <a className="lat-btn ghost sm" href={f.dataUrl} download={f.name}>⇓</a>
-                {adminView && (
+                {player.isAdmin && (
                   <button className="lat-btn danger sm" onClick={() => removeEventUpload(f.id)}>✗</button>
                 )}
               </span>
@@ -245,7 +245,7 @@ export default function BriefingPage({ params }: { params: Promise<{ id: string 
       {/* Fotos */}
       <div className="section-title">Fotos del evento</div>
       <div className="lat-panel">
-        {adminView && (
+        {player.isAdmin && (
           <div className="row between">
             <span className="help">Sube fotos del terreno, del briefing o del evento — todo el equipo puede verlas y descargarlas.</span>
             <button className="lat-btn ghost sm" onClick={() => photoRef.current?.click()}>+ Subir foto</button>
@@ -253,7 +253,7 @@ export default function BriefingPage({ params }: { params: Promise<{ id: string 
         )}
         {photos.length === 0 ? (
           <div className="empty-state">
-            Todavía no hay fotos. {adminView ? 'Usa "Subir foto" para agregar la primera.' : 'Comandancia puede subir fotos del terreno o del evento.'}
+            Todavía no hay fotos. {player.isAdmin ? 'Usa "Subir foto" para agregar la primera.' : 'Comandancia puede subir fotos del terreno o del evento.'}
           </div>
         ) : (
           <div className="gallery">

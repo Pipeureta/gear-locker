@@ -16,7 +16,7 @@ export default function PlayerProfileModal({
   onEdit?: () => void;
 }) {
   const currentPlayer = useCurrentPlayer();
-  const { adminNotes, setAdminNote, removeAdminNote } = useStore();
+  const { adminNotes, setAdminNote, removeAdminNote, gearChecklist } = useStore();
   const [editingSelf, setEditingSelf] = useState(false);
   const [noteDraft, setNoteDraft] = useState(adminNotes[player.id] ?? '');
   const [noteSaved, setNoteSaved] = useState(false);
@@ -91,17 +91,43 @@ export default function PlayerProfileModal({
           </section>
 
           <section className="member-profile-section">
-            <div className="panel-head"><h3>Equipo personal</h3></div>
-            {player.loadout ? (
-              <>
-                <div className="kv"><span className="k">Primaria</span><span className="v">{player.loadout.primary}</span></div>
-                <div className="kv"><span className="k">Secundaria</span><span className="v">{player.loadout.secondary || 'Sin registrar'}</span></div>
-                <div className="kv"><span className="k">FPS (chrono)</span><span className={`v ${player.loadout.fps <= 350 ? 'ok' : 'warn'}`}>{player.loadout.fps}</span></div>
-                <div className="kv"><span className="k">Radio</span><span className="v">{player.loadout.radio || 'Sin registrar'}</span></div>
-                <div className="kv"><span className="k">Camo</span><span className="v">{player.loadout.camo || 'Sin registrar'}</span></div>
-              </>
+            <div className="panel-head"><h3>Primarias</h3></div>
+            {(player.primaries?.length ?? 0) > 0 ? (
+              player.primaries!.map((p, i) => (
+                <div key={i} className="kv">
+                  <span className="k" style={{ textTransform: 'none' }}>{p.name}</span>
+                  <span className="v warn">{p.role}</span>
+                </div>
+              ))
             ) : (
-              <div className="empty-state">Este integrante todavía no registra su loadout.</div>
+              <div className="empty-state">
+                {isSelf
+                  ? 'Aún no registras tus primarias — agrégalas en Editar mi perfil.'
+                  : 'Este integrante todavía no registra sus primarias.'}
+              </div>
+            )}
+          </section>
+
+          <section className="member-profile-section">
+            <div className="panel-head">
+              <h3>Equipo personal</h3>
+              <span className="tiny mut">
+                {gearChecklist.filter((i) => player.gear?.[i]).length}/{gearChecklist.length}
+              </span>
+            </div>
+            {gearChecklist.length === 0 ? (
+              <div className="empty-state">Comandancia aún no define la lista de equipo.</div>
+            ) : (
+              <div className="gear-grid readonly">
+                {gearChecklist.map((item) => (
+                  <span key={item} className={`gear-check readonly${player.gear?.[item] ? ' on' : ''}`}>
+                    <span className={player.gear?.[item] ? 'okc' : 'dim-t'}>
+                      {player.gear?.[item] ? '✓' : '✗'}
+                    </span>
+                    <span>{item}</span>
+                  </span>
+                ))}
+              </div>
             )}
           </section>
         </div>

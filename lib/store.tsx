@@ -8,6 +8,7 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   ADMIN_NOTES,
+  DEFAULT_GEAR_CHECKLIST,
   DUES,
   DUE_AMOUNT,
   EVENTS,
@@ -127,8 +128,10 @@ interface StoreState {
   updateProcurement: (originalItem: string, item: Procurement) => void;
   removeProcurement: (item: string) => void;
 
-  adminView: boolean;
-  setAdminView: (v: boolean) => void;
+  // Lista de items de equipo personal, administrada por comandancia.
+  gearChecklist: string[];
+  addGearItem: (name: string) => void;
+  removeGearItem: (name: string) => void;
 }
 
 const DEFAULT_RSVPS: Record<string, Record<string, RsvpStatus>> = {
@@ -189,7 +192,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [eventUploads, setEventUploads] = useState<UploadedEventFile[]>([]);
   const [inventory, setInventory] = useState<InventoryItem[]>(INVENTORY);
   const [procurements, setProcurements] = useState<Procurement[]>(PROCUREMENTS);
-  const [adminView, setAdminView] = useState(false);
+  const [gearChecklist, setGearChecklist] = useState<string[]>(DEFAULT_GEAR_CHECKLIST);
   const loaded = useRef(false);
 
   useEffect(() => {
@@ -220,7 +223,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         if (s.eventUploads) setEventUploads(s.eventUploads);
         if (s.inventory) setInventory(s.inventory);
         if (s.procurements) setProcurements(s.procurements);
-        if (includeSession && typeof s.adminView === 'boolean') setAdminView(s.adminView);
+        if (s.gearChecklist) setGearChecklist(s.gearChecklist);
       } catch {
         /* estado corrupto — se ignora */
       }
@@ -248,13 +251,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           credWipeVersion: CRED_WIPE_VERSION,
           sessionPlayerId, players, adminNotes, events, credentials, passwordResets, dues, collectionAdjustment,
           rsvps, announcements, registrations, receipts, eventUploads, inventory,
-          procurements, adminView,
+          procurements, gearChecklist,
         }),
       );
     } catch {
       /* cuota de localStorage excedida — el estado sigue en memoria */
     }
-  }, [sessionPlayerId, players, adminNotes, events, credentials, passwordResets, dues, collectionAdjustment, rsvps, announcements, registrations, receipts, eventUploads, inventory, procurements, adminView]);
+  }, [sessionPlayerId, players, adminNotes, events, credentials, passwordResets, dues, collectionAdjustment, rsvps, announcements, registrations, receipts, eventUploads, inventory, procurements, gearChecklist]);
 
   useEffect(() => {
     if (!loaded.current) return;
@@ -524,8 +527,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     removeProcurement: (item) =>
       setProcurements((prev) => prev.filter((current) => current.item !== item)),
 
-    adminView,
-    setAdminView,
+    gearChecklist,
+    addGearItem: (name) => {
+      const clean = name.trim();
+      if (!clean) return;
+      setGearChecklist((prev) =>
+        prev.some((item) => item.toLowerCase() === clean.toLowerCase()) ? prev : [...prev, clean],
+      );
+    },
+    removeGearItem: (name) => setGearChecklist((prev) => prev.filter((item) => item !== name)),
   };
 
   return <StoreCtx.Provider value={value}>{children}</StoreCtx.Provider>;
