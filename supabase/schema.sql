@@ -229,6 +229,16 @@ create table if not exists public.announcements (
   created_at timestamptz not null default now()
 );
 
+-- Ajustes del equipo — fila única. Hoy solo guarda el ajuste manual sobre
+-- el total recaudado (permite a comandancia conciliar el total real sin
+-- perder la suma automática por cuotas).
+create table if not exists public.team_settings (
+  id boolean primary key default true,
+  collection_adjustment integer not null default 0,
+  constraint team_settings_singleton check (id = true)
+);
+insert into public.team_settings (id) values (true) on conflict (id) do nothing;
+
 -- =============================================================================
 -- RLS
 -- =============================================================================
@@ -248,6 +258,7 @@ alter table public.admin_notes enable row level security;
 alter table public.team_inventory enable row level security;
 alter table public.procurements enable row level security;
 alter table public.announcements enable row level security;
+alter table public.team_settings enable row level security;
 
 -- Helper: ¿el usuario actual es admin?
 create or replace function public.is_admin()
@@ -370,6 +381,11 @@ drop policy if exists ann_select on public.announcements;
 create policy ann_select on public.announcements for select to authenticated using (true);
 drop policy if exists ann_admin on public.announcements;
 create policy ann_admin on public.announcements for all to authenticated using (public.is_admin()) with check (public.is_admin());
+
+drop policy if exists settings_select on public.team_settings;
+create policy settings_select on public.team_settings for select to authenticated using (true);
+drop policy if exists settings_admin on public.team_settings;
+create policy settings_admin on public.team_settings for all to authenticated using (public.is_admin()) with check (public.is_admin());
 
 -- =============================================================================
 -- Storage — buckets y políticas

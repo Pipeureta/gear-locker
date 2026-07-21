@@ -3,7 +3,6 @@
 import { useRef, useState } from 'react';
 import { fmtCLP, fmtMonth, PAYMENT_INFO } from '@/lib/data';
 import { useCurrentPlayer, useStore } from '@/lib/store';
-import { fileToDataUrl } from '@/lib/img';
 
 function CopyRow({ label, value }: { label: string; value: string }) {
   const [copied, setCopied] = useState(false);
@@ -58,13 +57,10 @@ export default function CuotasPage() {
       setUpMsg('No tienes meses pendientes que respaldar.');
       return;
     }
-    try {
-      const dataUrl = await fileToDataUrl(f, 1200);
-      addReceipt(player.id, m, f.name, dataUrl);
-      setUpMsg(`Comprobante de ${fmtMonth(m)} enviado. Comandancia lo revisará y marcará tu cuota como pagada.`);
-    } catch (err) {
-      setUpMsg(err instanceof Error ? err.message : 'No se pudo subir el archivo.');
-    }
+    const { error } = await addReceipt(player.id, m, f);
+    setUpMsg(
+      error ? error : `Comprobante de ${fmtMonth(m)} enviado. Comandancia lo revisará y marcará tu cuota como pagada.`,
+    );
   };
 
   return (

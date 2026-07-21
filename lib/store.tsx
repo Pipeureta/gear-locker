@@ -1,21 +1,15 @@
 'use client';
 
-// Estado de cliente para cuotas, eventos, inventario, avisos, etc. La
-// identidad del usuario (login, registro, aprobación) vive en
-// lib/auth-context.tsx y es real (Supabase Auth + tabla players). Todo lo
-// demás en este archivo sigue en localStorage por ahora — se migra a
-// Supabase en una fase siguiente; las estructuras ya calzan 1:1 con
-// supabase/schema.sql para cuando llegue ese momento.
+// Estado de cliente para la app. La identidad del usuario (login, registro,
+// aprobación) vive en lib/auth-context.tsx. Todo lo demás (roster, eventos,
+// cuotas, comprobantes, notas, inventario, cotizaciones, avisos) vive en
+// Supabase — nada queda solo en el teléfono, salvo datos de ejemplo antes
+// de iniciar sesión.
 
-import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import {
-  ADMIN_NOTES,
-  DUES,
   DUE_AMOUNT,
-  INVENTORY,
   PLAYERS,
-  PROCUREMENTS,
-  SEED_ANNOUNCEMENTS,
   type Announcement,
   type Due,
   type GameEvent,
@@ -39,13 +33,42 @@ import {
   setRsvpRemote,
   updateEventRemote,
 } from './supabase/events';
+import {
+  acceptReceiptRemote,
+  fetchCollectionAdjustment,
+  fetchDues,
+  fetchReceipts,
+  insertDuesRemote,
+  setCollectionAdjustmentRemote,
+  setDuePaidRemote,
+  uploadReceiptRemote,
+} from './supabase/finance';
+import {
+  addAnnouncementRemote,
+  addInventoryItemRemote,
+  addProcurementRemote,
+  fetchAdminNotes,
+  fetchAnnouncements,
+  fetchInventory,
+  fetchProcurements,
+  removeAdminNoteRemote,
+  removeAnnouncementRemote,
+  removeInventoryItemRemote,
+  removeProcurementRemote,
+  setAdminNoteRemote,
+  updateAnnouncementRemote,
+  updateInventoryItemRemote,
+  updateProcurementRemote,
+} from './supabase/team-data';
 
 export interface Receipt {
   id: string;
   playerId: string;
   month: string; // 'YYYY-MM'
   filename: string;
-  dataUrl: string;
+  // Ruta en el bucket privado 'receipts' — hay que pedir una URL firmada
+  // para verlo/descargarlo (ver lib/supabase/finance.ts).
+  storagePath: string;
   uploadedAt: string;
   status: 'revision' | 'aceptado';
 }
@@ -93,7 +116,7 @@ interface StoreState {
   removeAnnouncement: (id: string) => void;
 
   receipts: Receipt[];
-  addReceipt: (playerId: string, month: string, filename: string, dataUrl: string) => void;
+  addReceipt: (playerId: string, month: string, file: File) => Promise<{ error: string | null }>;
   acceptReceipt: (id: string) => void;
 
   eventUploads: UploadedEventFile[];
@@ -112,8 +135,6 @@ interface StoreState {
 
 const StoreCtx = createContext<StoreState | null>(null);
 
-const LS_KEY = 'gear-locker-tsd-v4'; // versionado: invalida estados de versiones anteriores (v3 tenía login simulado)
-
 let seq = 0;
 function uid(prefix: string): string {
   seq += 1;
@@ -125,21 +146,20 @@ function today(): string {
 }
 
 export function StoreProvider({ children }: { children: ReactNode }) {
-  const { session } = useAuth();
+  const { session, supaPlayer } = useAuth();
   const [players, setPlayers] = useState<Player[]>(PLAYERS);
-  const [adminNotes, setAdminNotes] = useState<Record<string, string>>(ADMIN_NOTES);
+  const [adminNotes, setAdminNotes] = useState<Record<string, string>>({});
   const [events, setEvents] = useState<GameEvent[]>([]);
-  const [dues, setDues] = useState<Due[]>(DUES);
+  const [dues, setDues] = useState<Due[]>([]);
   // Ajuste manual sobre la suma de cuotas pagadas. Permite que comandancia
   // concilie el total real sin perder la actualización automática por cuotas.
   const [collectionAdjustment, setCollectionAdjustment] = useState(0);
   const [rsvps, setRsvps] = useState<Record<string, Record<string, RsvpStatus>>>({});
-  const [announcements, setAnnouncements] = useState<Announcement[]>(SEED_ANNOUNCEMENTS);
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [receipts, setReceipts] = useState<Receipt[]>([]);
   const [eventUploads, setEventUploads] = useState<UploadedEventFile[]>([]);
-  const [inventory, setInventory] = useState<InventoryItem[]>(INVENTORY);
-  const [procurements, setProcurements] = useState<Procurement[]>(PROCUREMENTS);
-  const loaded = useRef(false);
+  const [inventory, setInventory] = useState<InventoryItem[]>([]);
+  const [procurements, setProcurements] = useState<Procurement[]>([]);
 
   // El arreglo local (lib/data.ts) solo trae callsigns y datos de ejemplo —
   // a propósito, porque ese archivo está en el repo público. Los datos
@@ -174,67 +194,49 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           return next;
         });
 
-        // Eventos, RSVPs y archivos viven en Supabase (no en el teléfono),
-        // así que no desaparecen si se borran los datos del sitio.
-        const { events: remoteEvents, rsvps: remoteRsvps, uploads: remoteUploads } = await fetchEventData(merged);
-        setEvents(remoteEvents);
-        setRsvps(remoteRsvps);
-        setEventUploads(remoteUploads);
+        // Eventos, RSVPs, archivos, cuotas, comprobantes, notas, avisos,
+        // inventario y cotizaciones viven en Supabase — nada de esto
+        // desaparece si se borran los datos del sitio o se cambia de
+        // dispositivo.
+        const [
+          eventData,
+          remoteDues,
+          remoteReceipts,
+          remoteNotes,
+          remoteAnnouncements,
+          remoteInventory,
+          remoteProcurements,
+          remoteAdjustment,
+        ] = await Promise.all([
+          fetchEventData(merged),
+          fetchDues(merged),
+          fetchReceipts(merged),
+          fetchAdminNotes(merged),
+          fetchAnnouncements(),
+          fetchInventory(),
+          fetchProcurements(),
+          fetchCollectionAdjustment(),
+        ]);
+        setEvents(eventData.events);
+        setRsvps(eventData.rsvps);
+        setEventUploads(eventData.uploads);
+        setDues(remoteDues);
+        setReceipts(remoteReceipts);
+        setAdminNotes(remoteNotes);
+        setAnnouncements(remoteAnnouncements);
+        setInventory(remoteInventory);
+        setProcurements(remoteProcurements);
+        setCollectionAdjustment(remoteAdjustment);
       });
   }, [session]);
 
+  // Genera la cuota del mes en curso para cada integrante activo que aún no
+  // la tenga. Solo el admin puede insertar filas en "dues" (RLS), así que
+  // esto se hace en silencio cuando quien tiene la sesión abierta es
+  // comandancia — no bloquea a los demás, solo no genera la fila hasta que
+  // algún admin entre a la app ese mes.
   useEffect(() => {
-    const apply = (raw: string | null) => {
-      if (!raw) return;
-      try {
-        const s = JSON.parse(raw);
-        // players, events, rsvps y eventUploads NO se cachean: siempre
-        // vienen frescos de Supabase (ver el efecto de más arriba).
-        // Cachearlos era justo lo que hacía reaparecer datos viejos o
-        // resetearse a la info de muestra si se borraba el localStorage.
-        if (s.adminNotes) setAdminNotes(s.adminNotes);
-        if (s.dues) setDues(s.dues);
-        if (typeof s.collectionAdjustment === 'number') setCollectionAdjustment(s.collectionAdjustment);
-        if (s.announcements) setAnnouncements(s.announcements);
-        if (s.receipts) setReceipts(s.receipts);
-        if (s.inventory) setInventory(s.inventory);
-        if (s.procurements) setProcurements(s.procurements);
-      } catch {
-        /* estado corrupto — se ignora */
-      }
-    };
-
-    apply(localStorage.getItem(LS_KEY));
-    loaded.current = true;
-
-    // Sincronización en vivo entre pestañas/ventanas del mismo navegador:
-    // cualquier cambio hecho en otra pestaña se refleja aquí sin recargar.
-    // (Entre dispositivos distintos, esto lo hará Supabase Realtime.)
-    const onStorage = (e: StorageEvent) => {
-      if (e.key === LS_KEY) apply(e.newValue);
-    };
-    window.addEventListener('storage', onStorage);
-    return () => window.removeEventListener('storage', onStorage);
-  }, []);
-
-  useEffect(() => {
-    if (!loaded.current) return;
-    try {
-      localStorage.setItem(
-        LS_KEY,
-        JSON.stringify({
-          adminNotes, dues, collectionAdjustment,
-          announcements, receipts, inventory,
-          procurements,
-        }),
-      );
-    } catch {
-      /* cuota de localStorage excedida — el estado sigue en memoria */
-    }
-  }, [adminNotes, dues, collectionAdjustment, announcements, receipts, inventory, procurements]);
-
-  useEffect(() => {
-    if (!loaded.current) return;
+    if (!session || !supaPlayer?.is_admin) return;
     const ensureCurrentMonth = () => {
       const now = new Date();
       const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
@@ -243,6 +245,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           .filter((player) => player.status === 'activo' && player.joinedAt.slice(0, 7) <= month)
           .filter((player) => !current.some((due) => due.playerId === player.id && due.month === month))
           .map((player) => ({ playerId: player.id, month, amount: DUE_AMOUNT, paid: false }));
+        if (additions.length) {
+          insertDuesRemote(
+            additions
+              .map((a) => ({ playerSupaId: players.find((p) => p.id === a.playerId)?.supaId, month, amount: DUE_AMOUNT }))
+              .filter((r): r is { playerSupaId: string; month: string; amount: number } => Boolean(r.playerSupaId)),
+          );
+        }
         return additions.length ? [...current, ...additions] : current;
       });
     };
@@ -253,7 +262,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       window.clearInterval(timer);
       window.removeEventListener('focus', ensureCurrentMonth);
     };
-  }, [players]);
+  }, [session, supaPlayer?.is_admin, players]);
 
   const playerById = (id: string) => players.find((p) => p.id === id);
 
@@ -307,28 +316,40 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (supaId) setAttendanceRemote(eventId, supaId, attended);
     },
     adminNotes,
-    setAdminNote: (playerId, note) =>
-      setAdminNotes((prev) => ({ ...prev, [playerId]: note.trim() })),
-    removeAdminNote: (playerId) =>
+    setAdminNote: (playerId, note) => {
+      const trimmed = note.trim();
+      setAdminNotes((prev) => ({ ...prev, [playerId]: trimmed }));
+      const supaId = players.find((p) => p.id === playerId)?.supaId;
+      if (supaId) setAdminNoteRemote(supaId, trimmed);
+    },
+    removeAdminNote: (playerId) => {
       setAdminNotes((prev) => {
         const next = { ...prev };
         delete next[playerId];
         return next;
-      }),
+      });
+      const supaId = players.find((p) => p.id === playerId)?.supaId;
+      if (supaId) removeAdminNoteRemote(supaId);
+    },
 
     dues,
-    setDuePaid: (playerId, month, paid) =>
+    setDuePaid: (playerId, month, paid) => {
       setDues((prev) =>
         prev.map((d) =>
           d.playerId === playerId && d.month === month
             ? { ...d, paid, paidAt: paid ? today() : undefined }
             : d,
         ),
-      ),
+      );
+      const supaId = players.find((p) => p.id === playerId)?.supaId;
+      if (supaId) setDuePaidRemote(supaId, month, paid);
+    },
     collectionAdjustment,
     setCollectionTotal: (total) => {
       const paidFromDues = dues.filter((d) => d.paid).reduce((sum, d) => sum + d.amount, 0);
-      setCollectionAdjustment(Math.max(0, Math.round(total)) - paidFromDues);
+      const adjustment = Math.max(0, Math.round(total)) - paidFromDues;
+      setCollectionAdjustment(adjustment);
+      setCollectionAdjustmentRemote(adjustment);
     },
 
     rsvps,
@@ -339,18 +360,36 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     },
 
     announcements,
-    addAnnouncement: (a) =>
-      setAnnouncements((prev) => [{ ...a, id: uid('ann'), date: today() }, ...prev]),
-    updateAnnouncement: (id, patch) =>
-      setAnnouncements((prev) => prev.map((a) => (a.id === id ? { ...a, ...patch } : a))),
-    removeAnnouncement: (id) => setAnnouncements((prev) => prev.filter((a) => a.id !== id)),
+    addAnnouncement: (a) => {
+      addAnnouncementRemote(a).then((created) => {
+        if (created) setAnnouncements((prev) => [created, ...prev]);
+      });
+    },
+    updateAnnouncement: (id, patch) => {
+      setAnnouncements((prev) => prev.map((a) => (a.id === id ? { ...a, ...patch } : a)));
+      updateAnnouncementRemote(id, patch);
+    },
+    removeAnnouncement: (id) => {
+      setAnnouncements((prev) => prev.filter((a) => a.id !== id));
+      removeAnnouncementRemote(id);
+    },
 
     receipts,
-    addReceipt: (playerId, month, filename, dataUrl) =>
-      setReceipts((prev) => [
-        { id: uid('rcpt'), playerId, month, filename, dataUrl, uploadedAt: today(), status: 'revision' },
-        ...prev,
-      ]),
+    addReceipt: async (playerId, month, file) => {
+      const supaId = players.find((p) => p.id === playerId)?.supaId;
+      if (!supaId || !session) return { error: 'No se pudo identificar tu cuenta. Vuelve a iniciar sesión.' };
+      try {
+        const result = await uploadReceiptRemote(session.user.id, supaId, month, file);
+        if (!result) return { error: 'No se pudo guardar el comprobante.' };
+        setReceipts((prev) => [
+          { id: result.id, playerId, month, filename: file.name, storagePath: result.storagePath, uploadedAt: result.uploadedAt, status: 'revision' },
+          ...prev,
+        ]);
+        return { error: null };
+      } catch (err) {
+        return { error: err instanceof Error ? err.message : 'No se pudo subir el archivo.' };
+      }
+    },
     acceptReceipt: (id) => {
       const r = receipts.find((x) => x.id === id);
       if (!r) return;
@@ -362,6 +401,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             : d,
         ),
       );
+      const supaId = players.find((p) => p.id === r.playerId)?.supaId;
+      if (supaId) acceptReceiptRemote(id, supaId, r.month);
     },
 
     eventUploads,
@@ -377,17 +418,31 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     },
 
     inventory,
-    addInventoryItem: (item) => setInventory((prev) => [...prev, item]),
-    updateInventoryItem: (originalName, item) =>
-      setInventory((prev) => prev.map((current) => (current.name === originalName ? item : current))),
-    removeInventoryItem: (name) =>
-      setInventory((prev) => prev.filter((item) => item.name !== name)),
+    addInventoryItem: (item) => {
+      setInventory((prev) => [...prev, item]);
+      addInventoryItemRemote(item);
+    },
+    updateInventoryItem: (originalName, item) => {
+      setInventory((prev) => prev.map((current) => (current.name === originalName ? item : current)));
+      updateInventoryItemRemote(originalName, item);
+    },
+    removeInventoryItem: (name) => {
+      setInventory((prev) => prev.filter((item) => item.name !== name));
+      removeInventoryItemRemote(name);
+    },
     procurements,
-    addProcurement: (item) => setProcurements((prev) => [...prev, item]),
-    updateProcurement: (originalItem, item) =>
-      setProcurements((prev) => prev.map((current) => (current.item === originalItem ? item : current))),
-    removeProcurement: (item) =>
-      setProcurements((prev) => prev.filter((current) => current.item !== item)),
+    addProcurement: (item) => {
+      setProcurements((prev) => [...prev, item]);
+      addProcurementRemote(item);
+    },
+    updateProcurement: (originalItem, item) => {
+      setProcurements((prev) => prev.map((current) => (current.item === originalItem ? item : current)));
+      updateProcurementRemote(originalItem, item);
+    },
+    removeProcurement: (item) => {
+      setProcurements((prev) => prev.filter((current) => current.item !== item));
+      removeProcurementRemote(item);
+    },
   };
 
   return <StoreCtx.Provider value={value}>{children}</StoreCtx.Provider>;

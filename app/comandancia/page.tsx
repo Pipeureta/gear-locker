@@ -19,6 +19,7 @@ import PlayerProfileModal from '@/components/PlayerProfileModal';
 import EventEditor from '@/components/EventEditor';
 import AttendanceEditor from '@/components/AttendanceEditor';
 import InventoryPanel from '@/components/InventoryPanel';
+import { getReceiptUrl } from '@/lib/supabase/finance';
 
 let memberSeq = 100;
 
@@ -230,6 +231,10 @@ export default function ComandanciaPage() {
   const [attendanceEventId, setAttendanceEventId] = useState<string | null>(null);
   const [addingEvent, setAddingEvent] = useState(false);
   const [viewReceipt, setViewReceipt] = useState<string | null>(null);
+  const openReceipt = async (storagePath: string) => {
+    const url = await getReceiptUrl(storagePath);
+    if (url) setViewReceipt(url);
+  };
   const [activeTab, setActiveTab] = useState<'resumen' | 'equipo' | 'eventos' | 'finanzas' | 'inventario'>('resumen');
   const [editingCollection, setEditingCollection] = useState(false);
   const [collectionDraft, setCollectionDraft] = useState('');
@@ -482,7 +487,7 @@ export default function ComandanciaPage() {
                       <td><span className="acc">{p?.callsign}</span> {p?.name.toUpperCase()}</td>
                       <td>{fmtMonth(r.month)}</td>
                       <td>
-                        <button className="lat-btn ghost sm" onClick={() => setViewReceipt(r.dataUrl)}>
+                        <button className="lat-btn ghost sm" onClick={() => openReceipt(r.storagePath)}>
                           Ver
                         </button>
                       </td>
@@ -1043,11 +1048,13 @@ export default function ComandanciaPage() {
       {viewReceipt && (
         <ModalShell onClose={() => setViewReceipt(null)} style={{ maxWidth: 640 }}>
             <h2>Comprobante</h2>
-            {viewReceipt.startsWith('data:image') ? (
-              <img src={viewReceipt} alt="Comprobante" style={{ maxWidth: '100%', border: '1px solid var(--border)' }} />
-            ) : (
-              <span className="help">Documento adjunto (no es imagen).</span>
-            )}
+            <img
+              src={viewReceipt}
+              alt="Comprobante"
+              style={{ maxWidth: '100%', border: '1px solid var(--border)' }}
+              onError={(e) => { e.currentTarget.style.display = 'none'; }}
+            />
+            <span className="help">Si no se ve una imagen arriba, es un documento — descárgalo para verlo.</span>
             <div className="row" style={{ justifyContent: 'flex-end' }}>
               <a className="lat-btn" href={viewReceipt} download="comprobante">⇓ Descargar</a>
               <button className="lat-btn ghost" onClick={() => setViewReceipt(null)}>Cerrar</button>
