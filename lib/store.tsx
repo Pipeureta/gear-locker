@@ -178,12 +178,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       .then(async ({ data, error }) => {
         if (error || !data) return;
         const remoteRows = data as SupaPlayerRow[];
-        let merged: Player[] = [];
-        setPlayers(() => {
-          const next = remoteRows.map((remote) => fromSupaPlayer(remote, `sb-${remote.id}`));
-          merged = next;
-          return next;
-        });
+        // Se arma la lista ANTES de setPlayers: la función que se le pasa a
+        // un setState no corre en el momento, así que si se llenara ahí
+        // dentro, las consultas de abajo recibirían una lista vacía y
+        // descartarían todos los RSVPs, asistencia, cuotas y notas (no
+        // encontrarían a quién corresponde cada fila).
+        const merged = remoteRows.map((remote) => fromSupaPlayer(remote, `sb-${remote.id}`));
+        setPlayers(merged);
 
         // Eventos, RSVPs, archivos, cuotas, comprobantes, notas, avisos,
         // inventario y cotizaciones viven en Supabase — nada de esto
