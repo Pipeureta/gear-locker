@@ -281,12 +281,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setPlayers((prev) =>
         prev.map((player) => (player.id === id ? { ...player, status: 'inactivo', isAdmin: false } : player)),
       );
+      const supaId = players.find((p) => p.id === id)?.supaId;
+      if (supaId) {
+        createClient().from('players').update({ status: 'receso', is_admin: false }).eq('id', supaId);
+      }
     },
     events,
     addEvent: (event) => {
       const tempId = uid('event');
       createEventRemote(event, players).then((realId) => {
         if (realId) setEvents((prev) => [...prev, { ...event, id: realId }]);
+        else alert('No se pudo guardar el evento en la base de datos. Intenta de nuevo.');
       });
       return tempId;
     },
@@ -365,6 +370,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     addAnnouncement: (a) => {
       addAnnouncementRemote(a).then((created) => {
         if (created) setAnnouncements((prev) => [created, ...prev]);
+        else alert('No se pudo guardar el aviso. Intenta de nuevo.');
       });
     },
     updateAnnouncement: (id, patch) => {
@@ -412,6 +418,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const { sizeBytes, ...meta } = f;
       addFileRemote(f.eventId, { name: f.name, kind: f.kind, storagePath: f.storagePath, sizeBytes }).then((res) => {
         if (res) setEventUploads((prev) => [...prev, { ...meta, id: res.id, uploadedAt: res.uploadedAt }]);
+        else alert('No se pudo guardar el archivo en la base de datos. Intenta de nuevo.');
       });
     },
     removeEventUpload: (id) => {

@@ -156,7 +156,10 @@ export async function createEventRemote(draft: Omit<GameEvent, 'id'>, players: P
     })
     .select('id')
     .single();
-  if (error || !data) return null;
+  if (error || !data) {
+    console.error('createEventRemote:', error?.message);
+    return null;
+  }
 
   const id = data.id as string;
   const assignmentRows = toAssignmentRows(id, draft.assignments, players);
@@ -224,7 +227,10 @@ export async function addFileRemote(
     .insert({ event_id: eventId, name: file.name, kind: file.kind, storage_path: file.storagePath, size_bytes: file.sizeBytes })
     .select('id, created_at')
     .single();
-  if (error || !data) return null;
+  if (error || !data) {
+    console.error('addFileRemote:', error?.message);
+    return null;
+  }
   return { id: data.id as string, uploadedAt: data.created_at as string };
 }
 

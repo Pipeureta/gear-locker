@@ -22,8 +22,6 @@ import AttendanceEditor from '@/components/AttendanceEditor';
 import InventoryPanel from '@/components/InventoryPanel';
 import { getReceiptUrl } from '@/lib/supabase/finance';
 
-let memberSeq = 100;
-
 interface RegistrationRequestRow {
   id: string;
   user_id: string;
@@ -1019,9 +1017,8 @@ export default function ComandanciaPage() {
           onClose={() => { setEditing(null); setAdding(false); }}
           onSave={async (data) => {
             if (editing) {
-              updatePlayer(editing.id, data);
               if (editing.supaId) {
-                await createClient()
+                const { error } = await createClient()
                   .from('players')
                   .update({
                     callsign: data.callsign,
@@ -1035,10 +1032,33 @@ export default function ComandanciaPage() {
                     is_admin: data.isAdmin,
                   })
                   .eq('id', editing.supaId);
+                if (error) {
+                  alert('No se pudo guardar el cambio: ' + error.message);
+                  return;
+                }
               }
+              updatePlayer(editing.id, data);
             } else {
-              memberSeq += 1;
-              addPlayer({ ...data, id: `m-${Date.now()}-${memberSeq}` });
+              const { data: inserted, error } = await createClient()
+                .from('players')
+                .insert({
+                  callsign: data.callsign,
+                  name: data.name,
+                  nickname: data.nickname ?? null,
+                  phone: data.phone ?? null,
+                  rank: data.rank,
+                  status: data.status === 'inactivo' ? 'receso' : data.status,
+                  usual_role: data.usualRole,
+                  usual_roles: data.usualRoles,
+                  is_admin: data.isAdmin,
+                })
+                .select('id')
+                .single();
+              if (error || !inserted) {
+                alert('No se pudo crear la ficha: ' + (error?.message ?? 'error desconocido'));
+                return;
+              }
+              addPlayer({ ...data, id: `sb-${inserted.id}`, supaId: inserted.id });
             }
             setEditing(null);
             setAdding(false);

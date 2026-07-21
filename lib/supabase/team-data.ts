@@ -41,7 +41,10 @@ export async function addAnnouncementRemote(a: Omit<Announcement, 'id' | 'date'>
     .insert({ title: a.title, body: a.body, severity: a.severity })
     .select('*')
     .single();
-  if (error || !data) return null;
+  if (error || !data) {
+    console.error('addAnnouncementRemote:', error?.message);
+    return null;
+  }
   return { id: data.id, title: data.title, body: data.body, severity: data.severity, date: data.created_at };
 }
 
