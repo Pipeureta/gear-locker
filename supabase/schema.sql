@@ -1,8 +1,14 @@
 -- =============================================================================
 -- Gear Locker — esquema Supabase
 -- =============================================================================
--- Ejecutar completo en el SQL Editor de Supabase. Es seguro volver a
--- correrlo (todo usa if not exists / on conflict do nothing).
+-- Este archivo describe SOLO estructura (tablas, RLS, storage) — es seguro
+-- volver a correrlo entero, no toca datos de jugadores/eventos/cuotas ya
+-- cargados. Los datos de ejemplo (nómina inicial) están aparte en seed.sql
+-- y ESE no se debe volver a correr una vez que el equipo real está cargado.
+--
+-- Para cambios nuevos (agregar una columna, una tabla, una policy), corre
+-- SOLO el fragmento de SQL puntual que se te entregue, no el archivo
+-- completo — así evitas relanzar por accidente algo que ya corriste antes.
 --
 -- Modelo de acceso:
 --   * Auth real de Supabase, con el correo personal de cada integrante
@@ -223,16 +229,6 @@ create table if not exists public.announcements (
   created_at timestamptz not null default now()
 );
 
--- Suscripciones a notificaciones push (una fila por dispositivo/navegador).
-create table if not exists public.push_subscriptions (
-  id uuid primary key default gen_random_uuid(),
-  user_id uuid not null references auth.users (id) on delete cascade,
-  endpoint text not null unique,
-  p256dh text not null,
-  auth_key text not null,
-  created_at timestamptz not null default now()
-);
-
 -- =============================================================================
 -- RLS
 -- =============================================================================
@@ -252,7 +248,6 @@ alter table public.admin_notes enable row level security;
 alter table public.team_inventory enable row level security;
 alter table public.procurements enable row level security;
 alter table public.announcements enable row level security;
-alter table public.push_subscriptions enable row level security;
 
 -- Helper: ¿el usuario actual es admin?
 create or replace function public.is_admin()
@@ -376,53 +371,6 @@ create policy ann_select on public.announcements for select to authenticated usi
 drop policy if exists ann_admin on public.announcements;
 create policy ann_admin on public.announcements for all to authenticated using (public.is_admin()) with check (public.is_admin());
 
--- push_subscriptions: cada uno gestiona solo las suyas; admin puede leer
--- todas para mandar el anuncio de evento nuevo.
-drop policy if exists push_subs_own on public.push_subscriptions;
-create policy push_subs_own on public.push_subscriptions for all to authenticated
-  using (user_id = auth.uid() or public.is_admin()) with check (user_id = auth.uid());
-
--- =============================================================================
--- Notificaciones de eventos (espejo liviano para el cron de recordatorios)
--- =============================================================================
--- Los eventos siguen viviendo en el store local (ver README), así que acá
--- solo se refleja lo mínimo que el cron necesita para decidir cuándo avisar:
--- fecha/hora real del evento y qué recordatorios ya se mandaron.
-
-create table if not exists public.event_notify (
-  id text primary key, -- mismo id que el evento en el store local
-  name text not null,
-  location text,
-  event_at timestamptz not null,
-  announced boolean not null default false,
-  reminded_5d boolean not null default false,
-  reminded_2d boolean not null default false,
-  reminded_3h boolean not null default false,
-  created_at timestamptz not null default now()
-);
-
--- Espejo de RSVPs: solo para que el cron sepa quién no ha respondido.
-create table if not exists public.event_rsvp_sync (
-  event_id text not null references public.event_notify (id) on delete cascade,
-  user_id uuid not null references auth.users (id) on delete cascade,
-  status text not null check (status in ('va', 'tal-vez', 'no-va')),
-  updated_at timestamptz not null default now(),
-  primary key (event_id, user_id)
-);
-
-alter table public.event_notify enable row level security;
-alter table public.event_rsvp_sync enable row level security;
-
-drop policy if exists event_notify_select on public.event_notify;
-create policy event_notify_select on public.event_notify for select to authenticated using (true);
-drop policy if exists event_notify_admin on public.event_notify;
-create policy event_notify_admin on public.event_notify for all to authenticated
-  using (public.is_admin()) with check (public.is_admin());
-
-drop policy if exists rsvp_sync_own on public.event_rsvp_sync;
-create policy rsvp_sync_own on public.event_rsvp_sync for all to authenticated
-  using (user_id = auth.uid() or public.is_admin()) with check (user_id = auth.uid());
-
 -- =============================================================================
 -- Storage — buckets y políticas
 -- =============================================================================
@@ -474,44 +422,9 @@ create policy "receipts select own or admin" on storage.objects
   using (bucket_id = 'receipts' and ((storage.foldername(name))[1] = auth.uid()::text or public.is_admin()));
 
 -- =============================================================================
--- Datos semilla — nómina inicial
+-- Datos semilla — ver supabase/seed.sql
 -- =============================================================================
--- Nombres genéricos a propósito: este archivo es público (repo en GitHub),
--- así que no lleva datos personales reales. Los nombres reales de cada
--- integrante quedan en la base de datos (privada) apenas se registran en la
--- app y comandancia aprueba su solicitud — ver README para el flujo.
--- Se insertan SIN user_id: cada integrante queda "por reclamar" hasta que se
--- registre en la app con su callsign y comandancia apruebe la solicitud
--- (o, para la primera cuenta admin, se vincule a mano — ver instrucciones).
--- on conflict (callsign) hace este bloque seguro de correr más de una vez, y
--- no pisa nombres reales ya cargados en una base existente.
-
-insert into public.players (callsign, name, rank, status, usual_role, usual_roles, is_admin, joined_at)
-values
-  ('1B9',  'Integrante 1B9',  'Veterano', 'activo', 'Squad Leader',   array['Squad Leader'],   true,  '2021-02-01'),
-  ('2B9',  'Integrante 2B9',  'Titular',  'activo', 'LMG',            array['LMG'],            false, '2024-02-01'),
-  ('3B9',  'Integrante 3B9',  'Veterano', 'activo', 'Sniper',         array['Sniper'],         false, '2021-02-01'),
-  ('4B9',  'Integrante 4B9',  'Veterano', 'activo', 'Rifleman',       array['Rifleman'],       false, '2021-02-01'),
-  ('5B9',  'Integrante 5B9',  'Veterano', 'activo', 'Radio Operator', array['Radio Operator'], false, '2021-02-01'),
-  ('6B9',  'Integrante 6B9',  'Veterano', 'receso', 'Rifleman',       array['Rifleman'],       false, '2021-02-01'),
-  ('7B9',  'Integrante 7B9',  'Veterano', 'activo', 'DMR',            array['DMR'],            false, '2021-02-01'),
-  ('8B9',  'Integrante 8B9',  'Titular',  'activo', 'Medic',          array['Medic'],          false, '2022-01-01'),
-  ('9B9',  'Integrante 9B9',  'Titular',  'activo', 'Grenadier',      array['Grenadier'],      false, '2023-09-01'),
-  ('10B9', 'Integrante 10B9', 'Veterano', 'activo', 'Team Leader',    array['Team Leader'],    false, '2021-02-01'),
-  ('12B9', 'Integrante 12B9', 'Titular',  'activo', 'Squad Leader',   array['Squad Leader'],   true,  '2024-01-01'),
-  ('13B9', 'Integrante 13B9', 'Nuevo',    'activo', 'Rifleman',       array['Rifleman'],       false, '2026-01-01'),
-  ('14B9', 'Integrante 14B9', 'Nuevo',    'activo', 'Rifleman',       array['Rifleman'],       false, '2026-04-01')
-on conflict (callsign) do nothing;
-
-insert into public.gear_checklist_items (name) values
-  ('Protección ocular full-seal'),
-  ('Dead rag'),
-  ('Radio'),
-  ('Chaleco táctico / plate carrier'),
-  ('Casco'),
-  ('Uniforme del equipo'),
-  ('Botiquín personal (IFAK)'),
-  ('Hidratación (camelback)'),
-  ('Baterías de repuesto'),
-  ('Linterna')
-on conflict (name) do nothing;
+-- La nómina inicial de ejemplo YA NO vive en este archivo. schema.sql es
+-- seguro de re-correr cuantas veces quieras (todo usa if not exists / drop
+-- policy if exists), pero seed.sql NO debe volver a correrse en una base
+-- que ya tiene gente registrada — así que quedan separados a propósito.

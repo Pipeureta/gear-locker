@@ -5,14 +5,12 @@ import ModalShell from '@/components/ModalShell';
 import Link from 'next/link';
 import { daysUntil, fmtDate, rolesForPlayer, type RsvpStatus } from '@/lib/data';
 import { useCurrentPlayer, useStore } from '@/lib/store';
-import { useAuth } from '@/lib/auth-context';
 import {
   getEventFileUrls,
   removeEventFileFromStorage,
   uploadEventFile,
 } from '@/lib/supabase/event-files';
 import { fmtBytes } from '@/lib/img';
-import { syncRsvp } from '@/lib/notify-sync';
 
 const RSVP_LABEL: Record<RsvpStatus, string> = {
   va: '✓ Voy',
@@ -29,7 +27,6 @@ function isPdf(name: string): boolean {
 export default function BriefingPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const player = useCurrentPlayer();
-  const { authUser } = useAuth();
   const { rsvps, setRsvp, playerById, eventUploads, addEventUpload, removeEventUpload, events } = useStore();
   const event = events.find((item) => item.id === id);
 
@@ -152,11 +149,7 @@ export default function BriefingPage({ params }: { params: Promise<{ id: string 
               <button
                 key={status}
                 className={`lat-btn ${status === 'va' ? 'ok-line' : status === 'no-va' ? 'danger' : 'warn-line'}`}
-                onClick={() => {
-                  setRsvp(event.id, player.id, status);
-                  setEditingResponse(false);
-                  if (authUser) syncRsvp(event.id, authUser.id, status);
-                }}
+                onClick={() => { setRsvp(event.id, player.id, status); setEditingResponse(false); }}
               >
                 {RSVP_LABEL[status]}
               </button>

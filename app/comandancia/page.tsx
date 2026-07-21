@@ -19,7 +19,6 @@ import PlayerProfileModal from '@/components/PlayerProfileModal';
 import EventEditor from '@/components/EventEditor';
 import AttendanceEditor from '@/components/AttendanceEditor';
 import InventoryPanel from '@/components/InventoryPanel';
-import { syncEventNotify, broadcastEventAnnouncement, removeEventNotify } from '@/lib/notify-sync';
 
 let memberSeq = 100;
 
@@ -967,7 +966,7 @@ export default function ComandanciaPage() {
                     <button className="lat-btn sm" type="button" onClick={() => setAttendanceEventId(event.id)}>Asistencia</button>
                     <button className="lat-btn sm" type="button" onClick={() => setEditingEvent(event)}>Editar</button>
                     <button className="lat-btn danger sm" type="button" onClick={() => {
-                      if (confirm(`¿Eliminar el evento ${event.name}? También se quitarán sus respuestas y archivos.`)) { removeEvent(event.id); removeEventNotify(event.id); }
+                      if (confirm(`¿Eliminar el evento ${event.name}? También se quitarán sus respuestas y archivos.`)) removeEvent(event.id);
                     }}>Eliminar</button>
                   </div>
                 </div>
@@ -988,15 +987,8 @@ export default function ComandanciaPage() {
           initial={editingEvent ?? undefined}
           onClose={() => { setEditingEvent(null); setAddingEvent(false); }}
           onSave={(draft) => {
-            if (editingEvent) {
-              updateEvent(editingEvent.id, draft);
-              syncEventNotify({ ...draft, id: editingEvent.id });
-            } else {
-              const id = addEvent(draft);
-              const event = { ...draft, id };
-              syncEventNotify(event);
-              broadcastEventAnnouncement(event);
-            }
+            if (editingEvent) updateEvent(editingEvent.id, draft);
+            else addEvent(draft);
             setEditingEvent(null);
             setAddingEvent(false);
           }}

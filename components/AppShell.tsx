@@ -8,9 +8,6 @@ import { useAuth } from '@/lib/auth-context';
 import LoginScreen from '@/components/LoginScreen';
 import ProfileEditor from '@/components/ProfileEditor';
 import PendingApprovalScreen from '@/components/PendingApprovalScreen';
-import { getPushSubscription, pushSupported, subscribeToPush } from '@/lib/push';
-
-const PUSH_PROMPTED_KEY = 'gl-push-prompted';
 
 interface NavEntry {
   href: string;
@@ -47,27 +44,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       navigator.serviceWorker.register('/sw.js').catch(() => {});
     }
   }, []);
-
-  // Primer login en este dispositivo: pedir permiso de notificaciones una
-  // sola vez (localStorage evita insistir en cada sesión — si el navegador
-  // ya decidió permitir/denegar, no vuelve a preguntar solo).
-  useEffect(() => {
-    if (status !== 'active' || !pushSupported()) return;
-    if (localStorage.getItem(PUSH_PROMPTED_KEY)) return;
-
-    if (Notification.permission !== 'default') {
-      localStorage.setItem(PUSH_PROMPTED_KEY, '1');
-      return;
-    }
-
-    getPushSubscription().then((existing) => {
-      if (existing) {
-        localStorage.setItem(PUSH_PROMPTED_KEY, '1');
-        return;
-      }
-      subscribeToPush().finally(() => localStorage.setItem(PUSH_PROMPTED_KEY, '1'));
-    });
-  }, [status]);
 
   if (status === 'loading') {
     return (
