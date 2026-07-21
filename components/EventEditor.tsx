@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import ModalShell from '@/components/ModalShell';
-import { DEFAULT_RADIO_CHANNELS, ROLES, rolesForPlayer, type CommsChannel, type GameEvent, type Role } from '@/lib/data';
+import { DEFAULT_RADIO_CHANNELS, ROLES, rolesForPlayer, sortByCallsign, type CommsChannel, type GameEvent, type Role } from '@/lib/data';
 import { useStore } from '@/lib/store';
 
 type EventDraft = Omit<GameEvent, 'id'>;
@@ -151,7 +151,7 @@ export default function EventEditor({
             ))}
           </div>
           <div className="orbat-editor-list">
-            {players.filter((player) => player.status === 'activo').map((player) => {
+            {sortByCallsign(players.filter((player) => player.status === 'activo')).map((player) => {
               const assignment = assignments.find((item) => item.playerId === player.id);
               return (
                 <div className={`orbat-editor-row ${assignment ? 'selected' : ''}`} key={player.id}>
