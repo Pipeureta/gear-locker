@@ -101,10 +101,10 @@ export async function acceptReceiptRemote(receiptId: string, playerSupaId: strin
 }
 
 export async function fetchCollectionAdjustment(): Promise<number> {
-  const { data } = await createClient().from('team_settings').select('collection_adjustment').eq('id', true).maybeSingle();
+  const { data } = await createClient().from('team_settings').select('collection_adjustment').eq('id', 1).maybeSingle();
   return data?.collection_adjustment ?? 0;
 }
 
 export async function setCollectionAdjustmentRemote(value: number): Promise<void> {
-  await createClient().from('team_settings').update({ collection_adjustment: value }).eq('id', true);
+  await createClient().from('team_settings').update({ collection_adjustment: value }).eq('id', 1);
 }

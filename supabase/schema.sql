@@ -233,11 +233,10 @@ create table if not exists public.announcements (
 -- el total recaudado (permite a comandancia conciliar el total real sin
 -- perder la suma automática por cuotas).
 create table if not exists public.team_settings (
-  id boolean primary key default true,
-  collection_adjustment integer not null default 0,
-  constraint team_settings_singleton check (id = true)
+  id int primary key default 1,
+  collection_adjustment integer not null default 0
 );
-insert into public.team_settings (id) values (true) on conflict (id) do nothing;
+insert into public.team_settings (id) values (1) on conflict (id) do nothing;
 
 -- =============================================================================
 -- RLS
