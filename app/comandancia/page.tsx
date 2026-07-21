@@ -1018,6 +1018,7 @@ export default function ComandanciaPage() {
                 await createClient()
                   .from('players')
                   .update({
+                    callsign: data.callsign,
                     name: data.name,
                     nickname: data.nickname ?? null,
                     phone: data.phone ?? null,
