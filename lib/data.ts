@@ -247,11 +247,18 @@ export function attendancePct(playerId: string, events: GameEvent[]): number {
 export function fmtMonth(month: string): string {
   const [y, m] = month.split('-');
   const names = ['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC'];
-  return `${names[parseInt(m, 10) - 1]} ${y}`;
+  const name = names[parseInt(m, 10) - 1];
+  if (!name || !y) return '';
+  return `${name} ${y}`;
 }
 
 export function fmtDate(iso: string): string {
-  const dt = new Date(iso + 'T12:00');
+  // Acepta tanto 'YYYY-MM-DD' como un timestamp completo de Supabase
+  // ('YYYY-MM-DDTHH:mm:ss+00:00'). Antes concatenaba 'T12:00' a ciegas, lo
+  // que con un timestamp producía una fecha inválida (el "undefined NaN"
+  // que salía en los avisos de comandancia).
+  const dt = new Date(iso.slice(0, 10) + 'T12:00');
+  if (Number.isNaN(dt.getTime())) return '';
   const days = ['DOM', 'LUN', 'MAR', 'MIÉ', 'JUE', 'VIE', 'SÁB'];
   const months = ['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC'];
   return `${days[dt.getDay()]} ${dt.getDate()} ${months[dt.getMonth()]} ${dt.getFullYear()}`;
@@ -266,6 +273,8 @@ export function initials(callsign: string): string {
 }
 
 export function daysUntil(iso: string, today = new Date()): number {
-  const target = new Date(iso + 'T12:00');
+  // Mismo cuidado que fmtDate: tolera timestamps completos de Supabase.
+  const target = new Date(iso.slice(0, 10) + 'T12:00');
+  if (Number.isNaN(target.getTime())) return 0;
   return Math.ceil((target.getTime() - today.getTime()) / 86400000);
 }
