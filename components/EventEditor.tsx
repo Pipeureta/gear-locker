@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import ModalShell from '@/components/ModalShell';
-import { DEFAULT_RADIO_CHANNELS, ROLES, sortByCallsign, type CommsChannel, type GameEvent, type Role } from '@/lib/data';
+import { DEFAULT_RADIO_CHANNELS, fmtDate, ROLES, sortByCallsign, type CommsChannel, type GameEvent, type Role } from '@/lib/data';
 import { useStore } from '@/lib/store';
 
 type EventDraft = Omit<GameEvent, 'id'>;
@@ -102,7 +102,17 @@ export default function EventEditor({
           <div className="grid cols-2 compact-grid">
             <div className="lat-field"><label>Nombre del evento</label><input className="lat-input" value={name} onChange={(event) => setName(event.target.value)} placeholder="Ej: Operación Nómada" /></div>
             <div className="lat-field"><label>Tipo</label><select className="lat-select" value={type} onChange={(event) => setType(event.target.value as EventType)}><option>MILSIM</option><option>Combat Mission</option><option>Partida Abierta</option><option>Partida Cerrada</option><option>Entrenamiento</option></select></div>
-            <div className="lat-field"><label>Fecha</label><input className="lat-input" type="date" value={date} onChange={(event) => setDate(event.target.value)} /></div>
+            {/* lang="es-CL" fuerza el orden dd-mm-aaaa en el selector nativo:
+                sin esto el navegador usa su propio idioma y podía mostrar
+                mm/dd/aaaa, que se presta para escribir la fecha al revés. */}
+            <div className="lat-field">
+              <label>Fecha</label>
+              <input className="lat-input" type="date" lang="es-CL" value={date} onChange={(event) => setDate(event.target.value)} />
+              {/* El selector nativo se ve distinto según el navegador (algunos
+                  muestran mm/dd/aaaa), así que se confirma abajo la fecha
+                  elegida en texto para que no quede duda. */}
+              {date && <span className="tiny acc">{fmtDate(date)}</span>}
+            </div>
             <div className="lat-field"><label>Hora de inicio</label><input className="lat-input" type="time" value={startTime} onChange={(event) => setStartTime(event.target.value)} /></div>
             <div className="lat-field"><label>Lugar</label><input className="lat-input" value={location} onChange={(event) => setLocation(event.target.value)} placeholder="Cancha o recinto" /></div>
             <div className="lat-field"><label>Búsqueda para Google Maps</label><input className="lat-input" value={mapsQuery} onChange={(event) => setMapsQuery(event.target.value)} placeholder="Dirección o coordenadas" /></div>

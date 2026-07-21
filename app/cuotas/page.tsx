@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { fmtCLP, fmtMonth, PAYMENT_INFO } from '@/lib/data';
+import { fmtCLP, fmtMonth, monthOf, PAYMENT_INFO } from '@/lib/data';
 import { useCurrentPlayer, useStore } from '@/lib/store';
 
 function CopyRow({ label, value }: { label: string; value: string }) {
@@ -78,7 +78,7 @@ export default function CuotasPage() {
           <span className="help">
             {pending.length === 0
               ? 'Todas tus cuotas están pagadas.'
-              : `${pending.length} ${pending.length === 1 ? 'mes pendiente' : 'meses pendientes'}: ${pending.map((d) => fmtMonth(d.month)).join(', ')}.`}
+              : `${pending.length} ${pending.length === 1 ? 'mes pendiente' : 'meses pendientes'}: ${pending.map((d) => monthOf(d.month)).join(', ')}.`}
           </span>
         </div>
         <div className="lat-panel">

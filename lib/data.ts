@@ -244,26 +244,30 @@ export function attendancePct(playerId: string, events: GameEvent[]): number {
   return Math.round((n / past.length) * 100);
 }
 
-// Mes de una cuota ('YYYY-MM') en formato mm-aaaa, a juego con fmtDate.
 export function fmtMonth(month: string): string {
   const [y, m] = month.split('-');
-  if (!y || !m) return '';
-  return `${m}-${y}`;
+  const names = ['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC'];
+  const name = names[parseInt(m, 10) - 1];
+  if (!name || !y) return '';
+  return `${name} ${y}`;
 }
 
-// Formato de fecha de toda la app: dd-mm-aaaa.
 // Acepta tanto 'YYYY-MM-DD' como un timestamp completo de Supabase
 // ('YYYY-MM-DDTHH:mm:ss+00:00'), porque según de dónde venga el dato llega
 // en uno u otro formato.
 export function fmtDate(iso: string): string {
-  const [y, m, d] = iso.slice(0, 10).split('-');
-  if (!y || !m || !d) return '';
-  return `${d}-${m}-${y}`;
+  const dt = new Date(iso.slice(0, 10) + 'T12:00');
+  if (Number.isNaN(dt.getTime())) return '';
+  const days = ['DOM', 'LUN', 'MAR', 'MIÉ', 'JUE', 'VIE', 'SÁB'];
+  const months = ['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC'];
+  return `${days[dt.getDay()]} ${dt.getDate()} ${months[dt.getMonth()]} ${dt.getFullYear()}`;
 }
 
-// Mes en dos dígitos — para el bloque tipo calendario de los eventos.
+// Mes abreviado — para el bloque tipo calendario de los eventos y las
+// cabeceras compactas de la tabla de cuotas. Acepta 'YYYY-MM' y 'YYYY-MM-DD'.
 export function monthOf(iso: string): string {
-  return iso.slice(5, 7);
+  const months = ['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC'];
+  return months[parseInt(iso.slice(5, 7), 10) - 1] ?? '';
 }
 
 export function fmtCLP(n: number): string {
