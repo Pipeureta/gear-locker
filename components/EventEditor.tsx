@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import ModalShell from '@/components/ModalShell';
-import { DEFAULT_RADIO_CHANNELS, ROLES, rolesForPlayer, sortByCallsign, type CommsChannel, type GameEvent, type Role } from '@/lib/data';
+import { DEFAULT_RADIO_CHANNELS, ROLES, sortByCallsign, type CommsChannel, type GameEvent, type Role } from '@/lib/data';
 import { useStore } from '@/lib/store';
 
 type EventDraft = Omit<GameEvent, 'id'>;
@@ -157,7 +157,7 @@ export default function EventEditor({
                 <div className={`orbat-editor-row ${assignment ? 'selected' : ''}`} key={player.id}>
                   <label className="orbat-member-toggle">
                     <input type="checkbox" checked={Boolean(assignment)} onChange={(event) => {
-                      if (event.target.checked) setAssignments((current) => [...current, { playerId: player.id, squad: teamNames[0] || 'Equipo 1', role: rolesForPlayer(player)[0] }]);
+                      if (event.target.checked) setAssignments((current) => [...current, { playerId: player.id, squad: teamNames[0] || 'Equipo 1', role: 'Rifleman' }]);
                       else setAssignments((current) => current.filter((item) => item.playerId !== player.id));
                     }} />
                     <span><strong>{player.callsign}</strong> {player.nickname || player.name}</span>
@@ -165,7 +165,7 @@ export default function EventEditor({
                   <select className="lat-select" value={assignment?.squad ?? teamNames[0]} disabled={!assignment} onChange={(event) => setAssignments((current) => current.map((item) => item.playerId === player.id ? { ...item, squad: event.target.value } : item))}>
                     {teamNames.map((team) => <option key={team} value={team}>{team || 'Sin nombre'}</option>)}
                   </select>
-                  <select className="lat-select" value={assignment?.role ?? rolesForPlayer(player)[0]} disabled={!assignment} onChange={(event) => setAssignments((current) => current.map((item) => item.playerId === player.id ? { ...item, role: event.target.value as Role } : item))}>
+                  <select className="lat-select" value={assignment?.role ?? 'Rifleman'} disabled={!assignment} onChange={(event) => setAssignments((current) => current.map((item) => item.playerId === player.id ? { ...item, role: event.target.value as Role } : item))}>
                     {ROLES.map((role) => <option key={role} value={role}>{role}</option>)}
                   </select>
                 </div>
