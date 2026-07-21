@@ -160,9 +160,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       .select('*')
       .then(({ data, error }) => {
         if (error || !data) return;
+        const remoteRows = data as SupaPlayerRow[];
+        const remoteIds = new Set(remoteRows.map((r) => `sb-${r.id}`));
         setPlayers((prev) => {
-          const next = [...prev];
-          (data as SupaPlayerRow[]).forEach((remote) => {
+          // Se quitan las fichas "sb-" que ya no existen en Supabase (p.ej.
+          // eliminadas desde Comandancia) — si no, quedaban pegadas en el
+          // estado local para siempre.
+          const next = prev.filter((p) => !p.id.startsWith('sb-') || remoteIds.has(p.id));
+          remoteRows.forEach((remote) => {
             const idx = next.findIndex((p) => p.callsign.toLowerCase() === remote.callsign.toLowerCase());
             if (idx >= 0) {
               next[idx] = fromSupaPlayer(remote, next[idx].id);
@@ -180,7 +185,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (!raw) return;
       try {
         const s = JSON.parse(raw);
-        if (s.players) setPlayers(s.players);
+        // players NO se cachea: siempre viene fresco de Supabase (ver el
+        // efecto de más abajo). Cachearlo hacía que integrantes editados
+        // o eliminados en Supabase reaparecieran con datos viejos.
         if (s.adminNotes) setAdminNotes(s.adminNotes);
         if (s.events) setEvents(s.events);
         if (s.dues) setDues(s.dues);
@@ -215,7 +222,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       localStorage.setItem(
         LS_KEY,
         JSON.stringify({
-          players, adminNotes, events, dues, collectionAdjustment,
+          adminNotes, events, dues, collectionAdjustment,
           rsvps, announcements, receipts, eventUploads, inventory,
           procurements,
         }),
@@ -223,7 +230,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     } catch {
       /* cuota de localStorage excedida — el estado sigue en memoria */
     }
-  }, [players, adminNotes, events, dues, collectionAdjustment, rsvps, announcements, receipts, eventUploads, inventory, procurements]);
+  }, [adminNotes, events, dues, collectionAdjustment, rsvps, announcements, receipts, eventUploads, inventory, procurements]);
 
   useEffect(() => {
     if (!loaded.current) return;

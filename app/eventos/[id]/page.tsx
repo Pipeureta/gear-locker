@@ -138,7 +138,7 @@ export default function BriefingPage({ params }: { params: Promise<{ id: string 
         {!isPast && (
           <span className="help acc">¿Vas a este evento? Marca tu respuesta aquí — así comandancia puede armar los squads:</span>
         )}
-        <div className="row">
+        <div className="row briefing-actions">
           {!isPast && myRsvp && !editingResponse ? (
             <div className="rsvp-current">
               <span className={`lat-chip ${myRsvp === 'va' ? 'ok' : myRsvp === 'no-va' ? 'crit' : 'warn'}`}>{RSVP_LABEL[myRsvp]}</span>

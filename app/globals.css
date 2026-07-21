@@ -1501,5 +1501,9 @@ a { color: inherit; }
 @media (max-width: 430px) {
   .finance-filter-bar { grid-template-columns: 1fr; }
   .finance-filter-bar > .help { grid-column: 1; }
-  .rsvp-current { width: 100%; justify-content: space-between; }
+  .briefing-actions { flex-direction: column; align-items: stretch; }
+  .briefing-actions > a.lat-btn,
+  .briefing-actions > button.lat-btn { width: 100%; justify-content: center; }
+  .rsvp-current { width: 100%; justify-content: space-between; gap: 10px; }
+  .rsvp-current > button.lat-btn { flex: 0 0 auto; }
 }
