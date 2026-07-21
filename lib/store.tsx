@@ -12,7 +12,6 @@ import {
   ADMIN_NOTES,
   DUES,
   DUE_AMOUNT,
-  EVENTS,
   INVENTORY,
   PLAYERS,
   PROCUREMENTS,
@@ -30,6 +29,16 @@ import {
 } from './data';
 import { useAuth, type SupaPlayerRow } from './auth-context';
 import { createClient } from './supabase/client';
+import {
+  addFileRemote,
+  createEventRemote,
+  deleteEventRemote,
+  fetchEventData,
+  removeFileRemote,
+  setAttendanceRemote,
+  setRsvpRemote,
+  updateEventRemote,
+} from './supabase/events';
 
 export interface Receipt {
   id: string;
@@ -88,7 +97,7 @@ interface StoreState {
   acceptReceipt: (id: string) => void;
 
   eventUploads: UploadedEventFile[];
-  addEventUpload: (f: Omit<UploadedEventFile, 'id'>) => void;
+  addEventUpload: (f: Omit<UploadedEventFile, 'id'> & { sizeBytes: number }) => void;
   removeEventUpload: (id: string) => void;
 
   inventory: InventoryItem[];
@@ -100,21 +109,6 @@ interface StoreState {
   updateProcurement: (originalItem: string, item: Procurement) => void;
   removeProcurement: (item: string) => void;
 }
-
-const DEFAULT_RSVPS: Record<string, Record<string, RsvpStatus>> = {
-  'e-milsim-atacama': {
-    '1b9': 'va', '2b9': 'va', '3b9': 'va', '5b9': 'va', '7b9': 'va',
-    '8b9': 'va', '9b9': 'va', '12b9': 'va', '13b9': 'va', '14b9': 'va',
-    '4b9': 'no-va', '10b9': 'tal-vez',
-  },
-  'e-skirmish-jul': {
-    '1b9': 'va', '2b9': 'va', '5b9': 'va', '12b9': 'va',
-    '13b9': 'tal-vez', '14b9': 'va', '9b9': 'no-va',
-  },
-  'e-entrenamiento-ago': {
-    '12b9': 'va', '5b9': 'va', '13b9': 'tal-vez', '14b9': 'va',
-  },
-};
 
 const StoreCtx = createContext<StoreState | null>(null);
 
@@ -134,12 +128,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const { session } = useAuth();
   const [players, setPlayers] = useState<Player[]>(PLAYERS);
   const [adminNotes, setAdminNotes] = useState<Record<string, string>>(ADMIN_NOTES);
-  const [events, setEvents] = useState<GameEvent[]>(EVENTS);
+  const [events, setEvents] = useState<GameEvent[]>([]);
   const [dues, setDues] = useState<Due[]>(DUES);
   // Ajuste manual sobre la suma de cuotas pagadas. Permite que comandancia
   // concilie el total real sin perder la actualización automática por cuotas.
   const [collectionAdjustment, setCollectionAdjustment] = useState(0);
-  const [rsvps, setRsvps] = useState(DEFAULT_RSVPS);
+  const [rsvps, setRsvps] = useState<Record<string, Record<string, RsvpStatus>>>({});
   const [announcements, setAnnouncements] = useState<Announcement[]>(SEED_ANNOUNCEMENTS);
   const [receipts, setReceipts] = useState<Receipt[]>([]);
   const [eventUploads, setEventUploads] = useState<UploadedEventFile[]>([]);
@@ -158,10 +152,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     supabase
       .from('players')
       .select('*')
-      .then(({ data, error }) => {
+      .then(async ({ data, error }) => {
         if (error || !data) return;
         const remoteRows = data as SupaPlayerRow[];
         const remoteIds = new Set(remoteRows.map((r) => `sb-${r.id}`));
+        let merged: Player[] = [];
         setPlayers((prev) => {
           // Se quitan las fichas "sb-" que ya no existen en Supabase (p.ej.
           // eliminadas desde Comandancia) — si no, quedaban pegadas en el
@@ -175,8 +170,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
               next.push(fromSupaPlayer(remote, `sb-${remote.id}`));
             }
           });
+          merged = next;
           return next;
         });
+
+        // Eventos, RSVPs y archivos viven en Supabase (no en el teléfono),
+        // así que no desaparecen si se borran los datos del sitio.
+        const { events: remoteEvents, rsvps: remoteRsvps, uploads: remoteUploads } = await fetchEventData(merged);
+        setEvents(remoteEvents);
+        setRsvps(remoteRsvps);
+        setEventUploads(remoteUploads);
       });
   }, [session]);
 
@@ -185,17 +188,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (!raw) return;
       try {
         const s = JSON.parse(raw);
-        // players NO se cachea: siempre viene fresco de Supabase (ver el
-        // efecto de más abajo). Cachearlo hacía que integrantes editados
-        // o eliminados en Supabase reaparecieran con datos viejos.
+        // players, events, rsvps y eventUploads NO se cachean: siempre
+        // vienen frescos de Supabase (ver el efecto de más arriba).
+        // Cachearlos era justo lo que hacía reaparecer datos viejos o
+        // resetearse a la info de muestra si se borraba el localStorage.
         if (s.adminNotes) setAdminNotes(s.adminNotes);
-        if (s.events) setEvents(s.events);
         if (s.dues) setDues(s.dues);
         if (typeof s.collectionAdjustment === 'number') setCollectionAdjustment(s.collectionAdjustment);
-        if (s.rsvps) setRsvps(s.rsvps);
         if (s.announcements) setAnnouncements(s.announcements);
         if (s.receipts) setReceipts(s.receipts);
-        if (s.eventUploads) setEventUploads(s.eventUploads);
         if (s.inventory) setInventory(s.inventory);
         if (s.procurements) setProcurements(s.procurements);
       } catch {
@@ -222,15 +223,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       localStorage.setItem(
         LS_KEY,
         JSON.stringify({
-          adminNotes, events, dues, collectionAdjustment,
-          rsvps, announcements, receipts, eventUploads, inventory,
+          adminNotes, dues, collectionAdjustment,
+          announcements, receipts, inventory,
           procurements,
         }),
       );
     } catch {
       /* cuota de localStorage excedida — el estado sigue en memoria */
     }
-  }, [adminNotes, events, dues, collectionAdjustment, rsvps, announcements, receipts, eventUploads, inventory, procurements]);
+  }, [adminNotes, dues, collectionAdjustment, announcements, receipts, inventory, procurements]);
 
   useEffect(() => {
     if (!loaded.current) return;
@@ -272,12 +273,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     },
     events,
     addEvent: (event) => {
-      const id = uid('event');
-      setEvents((prev) => [...prev, { ...event, id }]);
-      return id;
+      const tempId = uid('event');
+      createEventRemote(event, players).then((realId) => {
+        if (realId) setEvents((prev) => [...prev, { ...event, id: realId }]);
+      });
+      return tempId;
     },
-    updateEvent: (id, event) =>
-      setEvents((prev) => prev.map((current) => (current.id === id ? { ...event, id } : current))),
+    updateEvent: (id, event) => {
+      setEvents((prev) => prev.map((current) => (current.id === id ? { ...event, id } : current)));
+      updateEventRemote(id, event, players);
+    },
     removeEvent: (id) => {
       setEvents((prev) => prev.filter((event) => event.id !== id));
       setRsvps((prev) => {
@@ -286,8 +291,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         return next;
       });
       setEventUploads((prev) => prev.filter((file) => file.eventId !== id));
+      deleteEventRemote(id);
     },
-    setEventAttended: (eventId, playerId, attended) =>
+    setEventAttended: (eventId, playerId, attended) => {
       setEvents((prev) =>
         prev.map((event) => {
           if (event.id !== eventId) return event;
@@ -296,7 +302,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           else current.delete(playerId);
           return { ...event, attended: [...current] };
         }),
-      ),
+      );
+      const supaId = players.find((p) => p.id === playerId)?.supaId;
+      if (supaId) setAttendanceRemote(eventId, supaId, attended);
+    },
     adminNotes,
     setAdminNote: (playerId, note) =>
       setAdminNotes((prev) => ({ ...prev, [playerId]: note.trim() })),
@@ -323,8 +332,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     },
 
     rsvps,
-    setRsvp: (eventId, playerId, status) =>
-      setRsvps((prev) => ({ ...prev, [eventId]: { ...prev[eventId], [playerId]: status } })),
+    setRsvp: (eventId, playerId, status) => {
+      setRsvps((prev) => ({ ...prev, [eventId]: { ...prev[eventId], [playerId]: status } }));
+      const supaId = players.find((p) => p.id === playerId)?.supaId;
+      if (supaId) setRsvpRemote(eventId, supaId, status);
+    },
 
     announcements,
     addAnnouncement: (a) =>
@@ -353,8 +365,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     },
 
     eventUploads,
-    addEventUpload: (f) => setEventUploads((prev) => [...prev, { ...f, id: uid('ef') }]),
-    removeEventUpload: (id) => setEventUploads((prev) => prev.filter((f) => f.id !== id)),
+    addEventUpload: (f) => {
+      const { sizeBytes, ...meta } = f;
+      addFileRemote(f.eventId, { name: f.name, kind: f.kind, storagePath: f.storagePath, sizeBytes }).then((res) => {
+        if (res) setEventUploads((prev) => [...prev, { ...meta, id: res.id, uploadedAt: res.uploadedAt }]);
+      });
+    },
+    removeEventUpload: (id) => {
+      setEventUploads((prev) => prev.filter((f) => f.id !== id));
+      removeFileRemote(id);
+    },
 
     inventory,
     addInventoryItem: (item) => setInventory((prev) => [...prev, item]),
@@ -382,6 +402,7 @@ export function useStore(): StoreState {
 function fromSupaPlayer(row: SupaPlayerRow, localId: string): Player {
   return {
     id: localId,
+    supaId: row.id,
     callsign: row.callsign,
     name: row.name,
     nickname: row.nickname ?? undefined,

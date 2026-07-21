@@ -37,6 +37,7 @@ export type MemberStatus = 'activo' | 'receso' | 'inactivo';
 
 export interface Player {
   id: string;
+  supaId?: string; // uuid real en public.players — solo si tiene cuenta
   callsign: string; // código TSD (1B9, 12B9, ...)
   name: string;
   nickname?: string;

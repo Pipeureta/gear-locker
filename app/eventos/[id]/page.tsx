@@ -91,6 +91,7 @@ export default function BriefingPage({ params }: { params: Promise<{ id: string 
         storagePath: path,
         size: fmtBytes(f.size),
         uploadedAt: new Date().toISOString(),
+        sizeBytes: f.size,
       });
     } catch (err) {
       setUpMsg(err instanceof Error ? err.message : 'No se pudo subir el archivo.');
