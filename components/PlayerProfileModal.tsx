@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import ModalShell from '@/components/ModalShell';
-import { attendancePct, pastEvents, rolesForPlayer, type Player } from '@/lib/data';
+import { pastEvents, rolesForPlayer, type Player } from '@/lib/data';
 import { useCurrentPlayer, useStore } from '@/lib/store';
 import { useGearChecklist } from '@/lib/gear-checklist';
 import ProfileEditor from '@/components/ProfileEditor';
@@ -17,15 +17,15 @@ export default function PlayerProfileModal({
   onEdit?: () => void;
 }) {
   const currentPlayer = useCurrentPlayer();
-  const { adminNotes, setAdminNote, removeAdminNote } = useStore();
+  const { adminNotes, setAdminNote, removeAdminNote, events, attendanceFor } = useStore();
   const { items: gearChecklist } = useGearChecklist();
   const [editingSelf, setEditingSelf] = useState(false);
   const [noteDraft, setNoteDraft] = useState(adminNotes[player.id] ?? '');
   const [noteSaved, setNoteSaved] = useState(false);
   const isSelf = currentPlayer.id === player.id;
   const canManageNotes = currentPlayer.isAdmin;
-  const attendance = attendancePct(player.id);
-  const history = pastEvents();
+  const attendance = attendanceFor(player.id);
+  const history = pastEvents(new Date(), events);
   const attended = history.filter((event) => event.attended?.includes(player.id)).length;
 
   if (editingSelf) {

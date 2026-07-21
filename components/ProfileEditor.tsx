@@ -7,8 +7,8 @@
 
 import { useRef, useState } from 'react';
 import ModalShell from '@/components/ModalShell';
-import { attendancePct, pastEvents, rolesForPlayer, ROLES, type PrimaryWeapon, type Role } from '@/lib/data';
-import { useCurrentPlayer } from '@/lib/store';
+import { pastEvents, rolesForPlayer, ROLES, type PrimaryWeapon, type Role } from '@/lib/data';
+import { useCurrentPlayer, useStore } from '@/lib/store';
 import { useAuth } from '@/lib/auth-context';
 import { useGearChecklist } from '@/lib/gear-checklist';
 import { createClient } from '@/lib/supabase/client';
@@ -17,6 +17,7 @@ export default function ProfileEditor({ onClose }: { onClose: () => void }) {
   const player = useCurrentPlayer();
   const { authUser, supaPlayer, refreshPlayer } = useAuth();
   const { items: gearChecklist } = useGearChecklist();
+  const { events, attendanceFor } = useStore();
   const [primaries, setPrimaries] = useState<PrimaryWeapon[]>(player.primaries ?? []);
   const [gear, setGear] = useState<Record<string, boolean>>(player.gear ?? {});
   const [name, setName] = useState(player.name);
@@ -32,8 +33,8 @@ export default function ProfileEditor({ onClose }: { onClose: () => void }) {
   const [passwordMsg, setPasswordMsg] = useState<{ text: string; ok: boolean } | null>(null);
   const [passwordBusy, setPasswordBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
-  const attendance = attendancePct(player.id);
-  const history = pastEvents();
+  const attendance = attendanceFor(player.id);
+  const history = pastEvents(new Date(), events);
   const attended = history.filter((event) => event.attended?.includes(player.id)).length;
 
   const pickPhoto = (f: File | undefined) => {

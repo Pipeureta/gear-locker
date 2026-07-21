@@ -8,8 +8,8 @@
 
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import {
+  attendancePct,
   DUE_AMOUNT,
-  PLAYERS,
   type Announcement,
   type Due,
   type GameEvent,
@@ -88,6 +88,8 @@ export interface UploadedEventFile {
 interface StoreState {
   players: Player[];
   playerById: (id: string) => Player | undefined;
+  // % de asistencia calculado con los eventos reales de Supabase.
+  attendanceFor: (playerId: string) => number;
   addPlayer: (p: Player) => void;
   updatePlayer: (id: string, patch: Partial<Player>) => void;
   removePlayer: (id: string) => void;
@@ -147,7 +149,7 @@ function today(): string {
 
 export function StoreProvider({ children }: { children: ReactNode }) {
   const { session, supaPlayer } = useAuth();
-  const [players, setPlayers] = useState<Player[]>(PLAYERS);
+  const [players, setPlayers] = useState<Player[]>([]);
   const [adminNotes, setAdminNotes] = useState<Record<string, string>>({});
   const [events, setEvents] = useState<GameEvent[]>([]);
   const [dues, setDues] = useState<Due[]>([]);
@@ -161,11 +163,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [procurements, setProcurements] = useState<Procurement[]>([]);
 
-  // El arreglo local (lib/data.ts) solo trae callsigns y datos de ejemplo —
-  // a propósito, porque ese archivo está en el repo público. Los datos
-  // reales de cada integrante (nombre, foto, rol, etc.) viven en Supabase;
-  // acá se traen y se sobreponen sobre el arreglo local por callsign, así
-  // el roster, las cuotas y los eventos muestran a la gente real.
+  // El roster se construye ENTERO desde Supabase, sin mezclar con ningún
+  // arreglo local. Antes se partía de una nómina de ejemplo en lib/data.ts y
+  // se le sobreponían los datos reales por callsign: las fichas de ejemplo
+  // que no calzaban con nadie real quedaban pegadas para siempre (los
+  // "Integrante 10B9" que aparecían al eliminar a alguien) porque no tenían
+  // id de Supabase que permitiera detectarlas como obsoletas.
   useEffect(() => {
     if (!session) return;
     const supabase = createClient();
@@ -175,23 +178,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       .then(async ({ data, error }) => {
         if (error || !data) return;
         const remoteRows = data as SupaPlayerRow[];
-        const remoteSupaIds = new Set(remoteRows.map((r) => r.id));
         let merged: Player[] = [];
-        setPlayers((prev) => {
-          // Se quitan las fichas que tenían cuenta real (supaId) y ya no
-          // existen en Supabase (p.ej. eliminadas desde Comandancia) — antes
-          // esto solo miraba el prefijo "sb-" del id local, que no cubre a
-          // los integrantes que "reclamaron" una ficha semilla ya existente
-          // (conservan su id local original, no uno "sb-").
-          const next = prev.filter((p) => !p.supaId || remoteSupaIds.has(p.supaId));
-          remoteRows.forEach((remote) => {
-            const idx = next.findIndex((p) => p.callsign.toLowerCase() === remote.callsign.toLowerCase());
-            if (idx >= 0) {
-              next[idx] = fromSupaPlayer(remote, next[idx].id);
-            } else {
-              next.push(fromSupaPlayer(remote, `sb-${remote.id}`));
-            }
-          });
+        setPlayers(() => {
+          const next = remoteRows.map((remote) => fromSupaPlayer(remote, `sb-${remote.id}`));
           merged = next;
           return next;
         });
@@ -271,6 +260,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const value: StoreState = {
     players,
     playerById,
+    attendanceFor: (playerId) => attendancePct(playerId, events),
+
+    // OJO: addPlayer / updatePlayer / deletePlayer solo refrescan el estado
+    // en pantalla — NO escriben en Supabase. Se llaman siempre DESPUÉS de un
+    // insert/update/delete real contra la tabla players (ver Comandancia),
+    // para que el cambio se vea al instante sin esperar la próxima
+    // sincronización. Nunca los uses solos: el cambio se perdería.
     addPlayer: (p) => setPlayers((prev) => [...prev, p]),
     updatePlayer: (id, patch) =>
       setPlayers((prev) => prev.map((p) => (p.id === id ? { ...p, ...patch } : p))),

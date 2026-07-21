@@ -4,7 +4,6 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import ModalShell from '@/components/ModalShell';
 import {
-  attendancePct,
   fmtCLP,
   fmtDate,
   fmtMonth,
@@ -37,7 +36,7 @@ interface RegistrationRequestRow {
 export default function ComandanciaPage() {
   const player = useCurrentPlayer();
   const {
-    rsvps, players, dues, playerById,
+    rsvps, players, dues, playerById, attendanceFor,
     announcements, addAnnouncement, updateAnnouncement, removeAnnouncement,
     receipts, acceptReceipt,
     addPlayer, updatePlayer, removePlayer, deletePlayer, adminNotes,
@@ -188,6 +187,7 @@ export default function ComandanciaPage() {
       }
       addPlayer({
         id: `sb-${inserted.id}`,
+        supaId: inserted.id,
         callsign: req.callsign,
         name: req.name,
         nickname: req.nickname ?? undefined,
@@ -906,7 +906,7 @@ export default function ComandanciaPage() {
         <div className="lat-panel">
           <div className="panel-head"><h3>Asistencia por integrante</h3></div>
           {active
-            .map((p) => ({ p, att: attendancePct(p.id) }))
+            .map((p) => ({ p, att: attendanceFor(p.id) }))
             .sort((a, b) => b.att - a.att)
             .map(({ p, att }) => (
               <div key={p.id} className="pbar-row">

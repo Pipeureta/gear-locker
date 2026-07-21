@@ -2,11 +2,12 @@
 
 import { useState } from 'react';
 import PlayerProfileModal from '@/components/PlayerProfileModal';
-import { attendancePct, rolesForPlayer, sortByCallsign, type Player } from '@/lib/data';
+import { rolesForPlayer, sortByCallsign, type Player } from '@/lib/data';
 import { useCurrentPlayer, useStore } from '@/lib/store';
 
 function PlayerCard({ player, onOpen }: { player: Player; onOpen: () => void }) {
-  const attendance = attendancePct(player.id);
+  const { attendanceFor } = useStore();
+  const attendance = attendanceFor(player.id);
   const inactive = player.status === 'receso';
 
   return (
