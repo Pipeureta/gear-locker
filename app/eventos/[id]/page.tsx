@@ -3,7 +3,7 @@
 import { use, useEffect, useRef, useState } from 'react';
 import ModalShell from '@/components/ModalShell';
 import Link from 'next/link';
-import { daysUntil, fmtDate, rolesForPlayer, type RsvpStatus } from '@/lib/data';
+import { daysUntil, fmtDate, monthOf, rolesForPlayer, type RsvpStatus } from '@/lib/data';
 import { useCurrentPlayer, useStore } from '@/lib/store';
 import {
   getEventFileUrls,
@@ -121,7 +121,7 @@ export default function BriefingPage({ params }: { params: Promise<{ id: string 
           <div className="row">
             <div className="event-date-block">
               <span className="d">{parseInt(event.date.slice(8), 10)}</span>
-              <span className="m">{fmtDate(event.date).split(' ')[2]}</span>
+              <span className="m">{monthOf(event.date)}</span>
             </div>
             <div>
               <div className="rc-name" style={{ fontSize: 15 }}>{event.name}</div>

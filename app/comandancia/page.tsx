@@ -7,6 +7,7 @@ import {
   fmtCLP,
   fmtDate,
   fmtMonth,
+  monthOf,
   sortByCallsign,
   upcomingEvents,
   type Player,
@@ -797,7 +798,7 @@ export default function ComandanciaPage() {
           <div className="finance-pending-list">
             {pendingPlayers.map(({ member, dues: memberDues }) => (
               <div key={member.id}>
-                <span><strong className="acc">{member.callsign}</strong> {member.nickname || member.name}<small>{member.status === 'inactivo' ? 'INACTIVO · historial' : memberDues.map((due) => fmtMonth(due.month).split(' ')[0]).join(' · ')}</small></span>
+                <span><strong className="acc">{member.callsign}</strong> {member.nickname || member.name}<small>{member.status === 'inactivo' ? 'INACTIVO · historial' : memberDues.map((due) => monthOf(due.month)).join(' · ')}</small></span>
                 <strong className="critc">{fmtCLP(memberDues.reduce((sum, due) => sum + due.amount, 0))}</strong>
               </div>
             ))}
@@ -814,7 +815,7 @@ export default function ComandanciaPage() {
             <thead>
               <tr>
                 <th>Integrante</th>
-                {financeMonths.map((m) => <th key={m}>{fmtMonth(m).split(' ')[0]}</th>)}
+                {financeMonths.map((m) => <th key={m}>{monthOf(m)}</th>)}
                 <th>Deuda</th>
               </tr>
             </thead>
@@ -873,7 +874,7 @@ export default function ComandanciaPage() {
                     const due = dues.find((item) => item.playerId === member.id && item.month === month);
                     return (
                       <div key={month} className={!due ? 'no-due' : due.paid ? 'paid' : 'pending'}>
-                        <span>{fmtMonth(month).split(' ')[0]}</span>
+                        <span>{monthOf(month)}</span>
                         {due ? (
                           <button
                             title={due.paid ? 'Marcar como pendiente' : 'Marcar como pagada'}
@@ -955,7 +956,7 @@ export default function ComandanciaPage() {
                 <div className="event-admin-row" key={event.id}>
                   <div className="event-date-block">
                     <span className="d">{parseInt(event.date.slice(8), 10)}</span>
-                    <span className="m">{fmtDate(event.date).split(' ')[2]}</span>
+                    <span className="m">{monthOf(event.date)}</span>
                   </div>
                   <div className="event-admin-info">
                     <strong>{event.name}</strong>

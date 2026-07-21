@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { daysUntil, fmtDate, upcomingEvents } from '@/lib/data';
+import { daysUntil, fmtDate, monthOf, upcomingEvents } from '@/lib/data';
 import { useCurrentPlayer, useStore } from '@/lib/store';
 import DeploymentCountdown from '@/components/DeploymentCountdown';
 import RsvpPrompt from '@/components/RsvpPrompt';
@@ -122,7 +122,7 @@ export default function HQPage() {
               <div className="row between">
                 <div className="event-date-block">
                   <span className="d">{parseInt(e.date.slice(8), 10)}</span>
-                  <span className="m">{fmtDate(e.date).split(' ')[2]}</span>
+                  <span className="m">{monthOf(e.date)}</span>
                 </div>
                 <span className={`lat-chip ${e.type === 'MILSIM' ? 'warn' : e.type === 'Entrenamiento' ? 'dim' : ''}`}>
                   {e.type}

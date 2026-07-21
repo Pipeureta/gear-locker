@@ -78,7 +78,7 @@ export default function CuotasPage() {
           <span className="help">
             {pending.length === 0
               ? 'Todas tus cuotas están pagadas.'
-              : `${pending.length} ${pending.length === 1 ? 'mes pendiente' : 'meses pendientes'}: ${pending.map((d) => fmtMonth(d.month).split(' ')[0]).join(', ')}.`}
+              : `${pending.length} ${pending.length === 1 ? 'mes pendiente' : 'meses pendientes'}: ${pending.map((d) => fmtMonth(d.month)).join(', ')}.`}
           </span>
         </div>
         <div className="lat-panel">

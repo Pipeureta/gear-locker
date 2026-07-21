@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
-import { fmtDate, pastEvents, upcomingEvents } from '@/lib/data';
+import { fmtDate, monthOf, pastEvents, upcomingEvents } from '@/lib/data';
 import { useCurrentPlayer, useStore } from '@/lib/store';
 import type { RsvpStatus } from '@/lib/data';
 
@@ -35,7 +35,7 @@ export default function EventosPage() {
                 <div className="row">
                   <div className="event-date-block">
                     <span className="d">{parseInt(e.date.slice(8), 10)}</span>
-                    <span className="m">{fmtDate(e.date).split(' ')[2]}</span>
+                    <span className="m">{monthOf(e.date)}</span>
                   </div>
                   <div>
                     <div className="rc-name">{e.name}</div>

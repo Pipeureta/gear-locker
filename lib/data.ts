@@ -244,24 +244,26 @@ export function attendancePct(playerId: string, events: GameEvent[]): number {
   return Math.round((n / past.length) * 100);
 }
 
+// Mes de una cuota ('YYYY-MM') en formato mm-aaaa, a juego con fmtDate.
 export function fmtMonth(month: string): string {
   const [y, m] = month.split('-');
-  const names = ['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC'];
-  const name = names[parseInt(m, 10) - 1];
-  if (!name || !y) return '';
-  return `${name} ${y}`;
+  if (!y || !m) return '';
+  return `${m}-${y}`;
 }
 
+// Formato de fecha de toda la app: dd-mm-aaaa.
+// Acepta tanto 'YYYY-MM-DD' como un timestamp completo de Supabase
+// ('YYYY-MM-DDTHH:mm:ss+00:00'), porque según de dónde venga el dato llega
+// en uno u otro formato.
 export function fmtDate(iso: string): string {
-  // Acepta tanto 'YYYY-MM-DD' como un timestamp completo de Supabase
-  // ('YYYY-MM-DDTHH:mm:ss+00:00'). Antes concatenaba 'T12:00' a ciegas, lo
-  // que con un timestamp producía una fecha inválida (el "undefined NaN"
-  // que salía en los avisos de comandancia).
-  const dt = new Date(iso.slice(0, 10) + 'T12:00');
-  if (Number.isNaN(dt.getTime())) return '';
-  const days = ['DOM', 'LUN', 'MAR', 'MIÉ', 'JUE', 'VIE', 'SÁB'];
-  const months = ['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC'];
-  return `${days[dt.getDay()]} ${dt.getDate()} ${months[dt.getMonth()]} ${dt.getFullYear()}`;
+  const [y, m, d] = iso.slice(0, 10).split('-');
+  if (!y || !m || !d) return '';
+  return `${d}-${m}-${y}`;
+}
+
+// Mes en dos dígitos — para el bloque tipo calendario de los eventos.
+export function monthOf(iso: string): string {
+  return iso.slice(5, 7);
 }
 
 export function fmtCLP(n: number): string {
