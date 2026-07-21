@@ -647,8 +647,8 @@ export default function ComandanciaPage() {
                             className="lat-btn danger sm"
                             onClick={async () => {
                               if (!confirm(`¿ELIMINAR definitivamente a ${p.callsign} ${p.name}? Se borra su ficha, cuotas y asistencia. No se puede deshacer.`)) return;
-                              if (p.id.startsWith('sb-')) {
-                                await createClient().from('players').delete().eq('id', p.id.slice(3));
+                              if (p.supaId) {
+                                await createClient().from('players').delete().eq('id', p.supaId);
                               }
                               deletePlayer(p.id);
                             }}
@@ -1020,7 +1020,7 @@ export default function ComandanciaPage() {
           onSave={async (data) => {
             if (editing) {
               updatePlayer(editing.id, data);
-              if (editing.id.startsWith('sb-')) {
+              if (editing.supaId) {
                 await createClient()
                   .from('players')
                   .update({
@@ -1034,7 +1034,7 @@ export default function ComandanciaPage() {
                     usual_roles: data.usualRoles,
                     is_admin: data.isAdmin,
                   })
-                  .eq('id', editing.id.slice(3));
+                  .eq('id', editing.supaId);
               }
             } else {
               memberSeq += 1;

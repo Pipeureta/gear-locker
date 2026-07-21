@@ -421,7 +421,7 @@ export function playerById(id: string): Player | undefined {
   return PLAYERS.find((p) => p.id === id);
 }
 
-// Orden estándar del roster: callsign "<número>B9" de mayor a menor. Los
+// Orden estándar del roster: callsign "<número>B9" de menor a mayor. Los
 // callsigns que no calzan con ese patrón quedan al final, en orden alfabético.
 export function sortByCallsign<T extends { callsign: string }>(items: T[]): T[] {
   const numOf = (callsign: string) => {
@@ -431,7 +431,7 @@ export function sortByCallsign<T extends { callsign: string }>(items: T[]): T[] 
   return [...items].sort((a, b) => {
     const na = numOf(a.callsign);
     const nb = numOf(b.callsign);
-    if (na !== null && nb !== null) return nb - na;
+    if (na !== null && nb !== null) return na - nb;
     if (na !== null) return -1;
     if (nb !== null) return 1;
     return a.callsign.localeCompare(b.callsign);

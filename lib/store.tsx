@@ -175,13 +175,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       .then(async ({ data, error }) => {
         if (error || !data) return;
         const remoteRows = data as SupaPlayerRow[];
-        const remoteIds = new Set(remoteRows.map((r) => `sb-${r.id}`));
+        const remoteSupaIds = new Set(remoteRows.map((r) => r.id));
         let merged: Player[] = [];
         setPlayers((prev) => {
-          // Se quitan las fichas "sb-" que ya no existen en Supabase (p.ej.
-          // eliminadas desde Comandancia) — si no, quedaban pegadas en el
-          // estado local para siempre.
-          const next = prev.filter((p) => !p.id.startsWith('sb-') || remoteIds.has(p.id));
+          // Se quitan las fichas que tenían cuenta real (supaId) y ya no
+          // existen en Supabase (p.ej. eliminadas desde Comandancia) — antes
+          // esto solo miraba el prefijo "sb-" del id local, que no cubre a
+          // los integrantes que "reclamaron" una ficha semilla ya existente
+          // (conservan su id local original, no uno "sb-").
+          const next = prev.filter((p) => !p.supaId || remoteSupaIds.has(p.supaId));
           remoteRows.forEach((remote) => {
             const idx = next.findIndex((p) => p.callsign.toLowerCase() === remote.callsign.toLowerCase());
             if (idx >= 0) {
