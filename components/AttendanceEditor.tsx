@@ -7,6 +7,7 @@
 import { useEffect } from 'react';
 import ModalShell from '@/components/ModalShell';
 import { useStore } from '@/lib/store';
+import { sortByCallsign } from '@/lib/data';
 
 export default function AttendanceEditor({
   eventId,
@@ -26,7 +27,7 @@ export default function AttendanceEditor({
   if (!event) return null;
 
   const attended = new Set(event.attended ?? []);
-  const sorted = [...players].sort((a, b) => a.callsign.localeCompare(b.callsign, undefined, { numeric: true }));
+  const sorted = sortByCallsign(players);
 
   return (
     <ModalShell onClose={onClose}>

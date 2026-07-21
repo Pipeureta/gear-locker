@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import PlayerProfileModal from '@/components/PlayerProfileModal';
-import { attendancePct, rolesForPlayer, type Player } from '@/lib/data';
+import { attendancePct, rolesForPlayer, sortByCallsign, type Player } from '@/lib/data';
 import { useCurrentPlayer, useStore } from '@/lib/store';
 
 function PlayerCard({ player, onOpen }: { player: Player; onOpen: () => void }) {
@@ -49,8 +49,8 @@ export default function RosterPage() {
   const currentPlayer = useCurrentPlayer();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selected = selectedId ? playerById(selectedId) : undefined;
-  const active = players.filter((player) => player.status === 'activo');
-  const receso = players.filter((player) => player.status === 'receso');
+  const active = sortByCallsign(players.filter((player) => player.status === 'activo'));
+  const receso = sortByCallsign(players.filter((player) => player.status === 'receso'));
 
   return (
     <>

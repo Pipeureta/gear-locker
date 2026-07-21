@@ -8,6 +8,7 @@ import {
   fmtCLP,
   fmtDate,
   fmtMonth,
+  sortByCallsign,
   upcomingEvents,
   type Player,
 } from '@/lib/data';
@@ -245,7 +246,7 @@ export default function ComandanciaPage() {
     return <div className="lat-alert crit">Acceso restringido a comandancia.</div>;
   }
 
-  const active = players.filter((p) => p.status === 'activo');
+  const active = sortByCallsign(players.filter((p) => p.status === 'activo'));
   const next = upcomingEvents(new Date(), events)[0];
   const nextRsvps = next ? rsvps[next.id] ?? {} : {};
   const confirmed = Object.values(nextRsvps).filter((s) => s === 'va').length;
@@ -629,7 +630,7 @@ export default function ComandanciaPage() {
                   <tr><th>Callsign</th><th>Nombre</th><th>Nickname</th><th>Teléfono</th><th>Rango</th><th>Estado</th><th>Admin</th><th></th></tr>
                 </thead>
                 <tbody>
-                  {players.filter((p) => p.status !== 'activo').map((p) => (
+                  {sortByCallsign(players.filter((p) => p.status !== 'activo')).map((p) => (
                     <tr key={p.id} style={{ opacity: 0.55 }}>
                       <td className="acc">{p.callsign}</td>
                       <td>{p.name}</td>

@@ -421,6 +421,23 @@ export function playerById(id: string): Player | undefined {
   return PLAYERS.find((p) => p.id === id);
 }
 
+// Orden estándar del roster: callsign "<número>B9" de mayor a menor. Los
+// callsigns que no calzan con ese patrón quedan al final, en orden alfabético.
+export function sortByCallsign<T extends { callsign: string }>(items: T[]): T[] {
+  const numOf = (callsign: string) => {
+    const match = /^(\d+)B9$/i.exec(callsign.trim());
+    return match ? parseInt(match[1], 10) : null;
+  };
+  return [...items].sort((a, b) => {
+    const na = numOf(a.callsign);
+    const nb = numOf(b.callsign);
+    if (na !== null && nb !== null) return nb - na;
+    if (na !== null) return -1;
+    if (nb !== null) return 1;
+    return a.callsign.localeCompare(b.callsign);
+  });
+}
+
 export function activePlayers(): Player[] {
   return PLAYERS.filter((p) => p.status === 'activo');
 }
