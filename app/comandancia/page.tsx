@@ -129,6 +129,21 @@ export default function ComandanciaPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [player.isAdmin]);
 
+  // Actualización en vivo: si llega una solicitud de ingreso nueva mientras
+  // comandancia tiene la pantalla abierta, aparece al instante sin recargar.
+  useEffect(() => {
+    if (!player.isAdmin) return;
+    const supabase = createClient();
+    const channel = supabase
+      .channel('gear-locker-requests')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'registration_requests' }, () => loadRequests())
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [player.isAdmin]);
+
   const localMatchByCallsign = (callsign: string) =>
     players.find((p) => p.callsign.toLowerCase() === callsign.toLowerCase());
 

@@ -6,7 +6,7 @@
 // Supabase — nada queda solo en el teléfono, salvo datos de ejemplo antes
 // de iniciar sesión.
 
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 import {
   attendancePct,
   DUE_AMOUNT,
@@ -169,58 +169,88 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   // que no calzaban con nadie real quedaban pegadas para siempre (los
   // "Integrante 10B9" que aparecían al eliminar a alguien) porque no tenían
   // id de Supabase que permitiera detectarlas como obsoletas.
+  const reloadAll = useCallback(async () => {
+    const supabase = createClient();
+    const { data, error } = await supabase.from('players').select('*');
+    if (error || !data) return;
+    const remoteRows = data as SupaPlayerRow[];
+    // Se arma la lista ANTES de setPlayers: la función que se le pasa a
+    // un setState no corre en el momento, así que si se llenara ahí
+    // dentro, las consultas de abajo recibirían una lista vacía y
+    // descartarían todos los RSVPs, asistencia, cuotas y notas (no
+    // encontrarían a quién corresponde cada fila).
+    const merged = remoteRows.map((remote) => fromSupaPlayer(remote, `sb-${remote.id}`));
+    setPlayers(merged);
+
+    // Eventos, RSVPs, archivos, cuotas, comprobantes, notas, avisos,
+    // inventario y cotizaciones viven en Supabase — nada de esto
+    // desaparece si se borran los datos del sitio o se cambia de
+    // dispositivo.
+    const [
+      eventData,
+      remoteDues,
+      remoteReceipts,
+      remoteNotes,
+      remoteAnnouncements,
+      remoteInventory,
+      remoteProcurements,
+      remoteAdjustment,
+    ] = await Promise.all([
+      fetchEventData(merged),
+      fetchDues(merged),
+      fetchReceipts(merged),
+      fetchAdminNotes(merged),
+      fetchAnnouncements(),
+      fetchInventory(),
+      fetchProcurements(),
+      fetchCollectionAdjustment(),
+    ]);
+    setEvents(eventData.events);
+    setRsvps(eventData.rsvps);
+    setEventUploads(eventData.uploads);
+    setDues(remoteDues);
+    setReceipts(remoteReceipts);
+    setAdminNotes(remoteNotes);
+    setAnnouncements(remoteAnnouncements);
+    setInventory(remoteInventory);
+    setProcurements(remoteProcurements);
+    setCollectionAdjustment(remoteAdjustment);
+  }, []);
+
+  useEffect(() => {
+    if (!session) return;
+    reloadAll();
+  }, [session, reloadAll]);
+
+  // Actualización en vivo: cuando cualquier otra persona (o pestaña) crea,
+  // edita o borra algo en las tablas de abajo, todos los que tengan la app
+  // abierta lo ven al instante, sin recargar. "debounce" corto para no
+  // relanzar 10 fetches si llegan varios cambios juntos (p.ej. al guardar
+  // un evento con su ORBAT y su plan de radio en la misma acción).
   useEffect(() => {
     if (!session) return;
     const supabase = createClient();
-    supabase
-      .from('players')
-      .select('*')
-      .then(async ({ data, error }) => {
-        if (error || !data) return;
-        const remoteRows = data as SupaPlayerRow[];
-        // Se arma la lista ANTES de setPlayers: la función que se le pasa a
-        // un setState no corre en el momento, así que si se llenara ahí
-        // dentro, las consultas de abajo recibirían una lista vacía y
-        // descartarían todos los RSVPs, asistencia, cuotas y notas (no
-        // encontrarían a quién corresponde cada fila).
-        const merged = remoteRows.map((remote) => fromSupaPlayer(remote, `sb-${remote.id}`));
-        setPlayers(merged);
-
-        // Eventos, RSVPs, archivos, cuotas, comprobantes, notas, avisos,
-        // inventario y cotizaciones viven en Supabase — nada de esto
-        // desaparece si se borran los datos del sitio o se cambia de
-        // dispositivo.
-        const [
-          eventData,
-          remoteDues,
-          remoteReceipts,
-          remoteNotes,
-          remoteAnnouncements,
-          remoteInventory,
-          remoteProcurements,
-          remoteAdjustment,
-        ] = await Promise.all([
-          fetchEventData(merged),
-          fetchDues(merged),
-          fetchReceipts(merged),
-          fetchAdminNotes(merged),
-          fetchAnnouncements(),
-          fetchInventory(),
-          fetchProcurements(),
-          fetchCollectionAdjustment(),
-        ]);
-        setEvents(eventData.events);
-        setRsvps(eventData.rsvps);
-        setEventUploads(eventData.uploads);
-        setDues(remoteDues);
-        setReceipts(remoteReceipts);
-        setAdminNotes(remoteNotes);
-        setAnnouncements(remoteAnnouncements);
-        setInventory(remoteInventory);
-        setProcurements(remoteProcurements);
-        setCollectionAdjustment(remoteAdjustment);
-      });
-  }, [session]);
+    let timer: number | undefined;
+    const scheduleReload = () => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(reloadAll, 400);
+    };
+    const tables = [
+      'players', 'events', 'event_rsvps', 'event_assignments', 'event_files',
+      'comms_plan', 'event_attendance', 'dues', 'payment_receipts',
+      'admin_notes', 'announcements', 'team_inventory', 'procurements',
+      'team_settings',
+    ];
+    const channel = supabase.channel('gear-locker-live');
+    tables.forEach((table) => {
+      channel.on('postgres_changes', { event: '*', schema: 'public', table }, scheduleReload);
+    });
+    channel.subscribe();
+    return () => {
+      window.clearTimeout(timer);
+      supabase.removeChannel(channel);
+    };
+  }, [session, reloadAll]);
 
   // Genera la cuota del mes en curso para cada integrante activo que aún no
   // la tenga. Solo el admin puede insertar filas en "dues" (RLS), así que

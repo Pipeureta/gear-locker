@@ -437,6 +437,33 @@ create policy "receipts select own or admin" on storage.objects
   using (bucket_id = 'receipts' and ((storage.foldername(name))[1] = auth.uid()::text or public.is_admin()));
 
 -- =============================================================================
+-- Realtime — actualización en vivo de la app (sin recargar)
+-- =============================================================================
+-- Por defecto Supabase no transmite cambios de ninguna tabla. Este bloque
+-- agrega las tablas necesarias a la publicación "supabase_realtime" — es
+-- idempotente (revisa antes de agregar), así que es seguro volver a
+-- correrlo.
+do $$
+declare
+  t text;
+begin
+  foreach t in array array[
+    'players', 'events', 'event_rsvps', 'event_assignments', 'event_files',
+    'comms_plan', 'event_attendance', 'dues', 'payment_receipts',
+    'admin_notes', 'announcements', 'team_inventory', 'procurements',
+    'team_settings', 'registration_requests'
+  ]
+  loop
+    if not exists (
+      select 1 from pg_publication_tables
+      where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = t
+    ) then
+      execute format('alter publication supabase_realtime add table public.%I', t);
+    end if;
+  end loop;
+end $$;
+
+-- =============================================================================
 -- Datos semilla — ver supabase/seed.sql
 -- =============================================================================
 -- La nómina inicial de ejemplo YA NO vive en este archivo. schema.sql es
