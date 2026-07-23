@@ -27,7 +27,7 @@ function isPdf(name: string): boolean {
 export default function BriefingPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const player = useCurrentPlayer();
-  const { rsvps, setRsvp, playerById, eventUploads, addEventUpload, removeEventUpload, events } = useStore();
+  const { rsvps, setRsvp, playerById, eventUploads, addEventUpload, removeEventUpload, events, eventGearStatus, setEventGearItem } = useStore();
   const event = events.find((item) => item.id === id);
 
   const fileRef = useRef<HTMLInputElement>(null);
@@ -77,6 +77,22 @@ export default function BriefingPage({ params }: { params: Promise<{ id: string 
 
   const squads = [...new Set(event.assignments.map((a) => a.squad))];
   const mapsUrl = `https://maps.google.com/?q=${encodeURIComponent(event.mapsQuery)}`;
+
+  const requiredGear = event.requiredGear ?? [];
+  const myGear = eventGearStatus[event.id]?.[player.id] ?? {};
+  const readinessRoster = going.length > 0 ? going : Object.keys(eventRsvps);
+  let readyCells = 0;
+  const gearByItem = requiredGear.map((item) => {
+    const holders = readinessRoster.filter((pid) => eventGearStatus[event.id]?.[pid]?.[item]);
+    readyCells += holders.length;
+    const missing = readinessRoster
+      .filter((pid) => !holders.includes(pid))
+      .map((pid) => playerById(pid)?.callsign)
+      .filter((c): c is string => Boolean(c));
+    return { item, have: holders.length, of: readinessRoster.length, missing };
+  });
+  const totalCells = requiredGear.length * readinessRoster.length;
+  const readinessPct = totalCells > 0 ? Math.round((readyCells / totalCells) * 100) : 0;
 
   const upload = async (f: File | undefined, kind: 'imagen' | 'documento') => {
     if (!f) return;
@@ -189,6 +205,31 @@ export default function BriefingPage({ params }: { params: Promise<{ id: string 
           )}
         </div>
 
+        {/* Mi equipo para este evento */}
+        {requiredGear.length > 0 && (
+          <div className="lat-panel">
+            <div className="panel-head"><h3>Mi equipo para este evento</h3></div>
+            <span className="help">
+              Lo que comandancia pide para esta operación — aparte de tu equipo personal del perfil. Marca lo que ya tienes listo.
+            </span>
+            <div className="gear-grid">
+              {requiredGear.map((item) => (
+                <label key={item} className={`gear-check${myGear[item] ? ' on' : ''}`}>
+                  <input
+                    type="checkbox"
+                    checked={!!myGear[item]}
+                    onChange={(e) => setEventGearItem(event.id, player.id, item, e.target.checked)}
+                  />
+                  <span>{item}</span>
+                </label>
+              ))}
+            </div>
+            <span className="tiny mut">
+              {requiredGear.filter((i) => myGear[i]).length}/{requiredGear.length} listo
+            </span>
+          </div>
+        )}
+
         {/* Recordatorios */}
         <div className="lat-panel">
           <div className="panel-head"><h3>Recordatorios</h3></div>
@@ -294,6 +335,44 @@ export default function BriefingPage({ params }: { params: Promise<{ id: string 
           )}
         </div>
       </div>
+
+      {/* Preparación del equipo */}
+      {requiredGear.length > 0 && (
+        <>
+          <div className="section-title">Preparación del equipo</div>
+          <div className="lat-panel">
+            <div className="row between">
+              <span className="help">
+                Qué tan listo está el equipo con lo que se pidió para este evento — {readinessRoster.length} persona
+                {readinessRoster.length === 1 ? '' : 's'} considerada{readinessRoster.length === 1 ? '' : 's'}
+                {going.length === 0 && ' (nadie ha confirmado todavía, se cuenta a quien haya respondido)'}.
+              </span>
+              <span className={`big-num ${readinessPct >= 80 ? 'ok' : readinessPct >= 50 ? 'warn' : 'crit'}`} style={{ fontSize: 26 }}>
+                {readinessPct}<span className="unit">%</span>
+              </span>
+            </div>
+            <div className="pbar-row" style={{ marginTop: 4 }}>
+              <div className={`pbar ${readinessPct >= 80 ? 'ok' : readinessPct >= 50 ? 'warn' : 'crit'}`}>
+                <span style={{ width: `${readinessPct}%` }} />
+              </div>
+            </div>
+            <div className="table-scroll" style={{ marginTop: 10 }}>
+              <table className="lat-table">
+                <thead><tr><th>Ítem</th><th>Listo</th><th>Falta a</th></tr></thead>
+                <tbody>
+                  {gearByItem.map((row) => (
+                    <tr key={row.item}>
+                      <td>{row.item}</td>
+                      <td className={row.have === row.of ? 'badge-ok' : 'badge-warn'}>{row.have}/{row.of}</td>
+                      <td className="tiny mut">{row.missing.length > 0 ? row.missing.join(', ') : '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
 
       {/* Intel (fotos) */}
       <div className="section-title">Intel (fotos)</div>

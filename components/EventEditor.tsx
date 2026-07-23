@@ -4,6 +4,7 @@ import { useState } from 'react';
 import ModalShell from '@/components/ModalShell';
 import { DEFAULT_RADIO_CHANNELS, fmtDate, ROLES, sortByCallsign, type CommsChannel, type GameEvent, type Role } from '@/lib/data';
 import { useStore } from '@/lib/store';
+import { useGearChecklist } from '@/lib/gear-checklist';
 
 type EventDraft = Omit<GameEvent, 'id'>;
 type EventType = GameEvent['type'];
@@ -38,6 +39,7 @@ export default function EventEditor({
   onClose: () => void;
 }) {
   const { players } = useStore();
+  const { items: gearChecklist } = useGearChecklist();
   const [name, setName] = useState(initial?.name ?? '');
   const [type, setType] = useState<EventType>(initial?.type ?? 'Combat Mission');
   const [date, setDate] = useState(initial?.date ?? '');
@@ -50,6 +52,7 @@ export default function EventEditor({
   const [fpsLimits, setFpsLimits] = useState(initial?.fpsLimits ?? [{ role: 'Fusil / SMG', max: 350 }]);
   const [comms, setComms] = useState<CommsChannel[]>(editableComms(initial));
   const [assignments, setAssignments] = useState(initial?.assignments ?? []);
+  const [requiredGear, setRequiredGear] = useState<string[]>(initial?.requiredGear ?? []);
   const [teamNames, setTeamNames] = useState<string[]>(() => {
     const existing = [...new Set((initial?.assignments ?? []).map((assignment) => assignment.squad))];
     return existing.length ? existing : ['Equipo 1'];
@@ -84,6 +87,7 @@ export default function EventEditor({
       comms: comms.map((channel) => ({ ...channel, channel: channel.channel.trim(), name: channel.name?.trim() })),
       assignments,
       attended: initial?.attended,
+      requiredGear,
     });
   };
 
@@ -182,6 +186,32 @@ export default function EventEditor({
               );
             })}
           </div>
+        </div>
+
+        <div className="event-editor-section">
+          <div className="panel-head">
+            <div><h3>Equipo requerido para este evento</h3><span className="tiny dim-t">Marca qué deben llevar. Cada integrante verá esta lista aparte en el briefing y marcará si lo tiene, independiente de su equipo personal del perfil.</span></div>
+          </div>
+          {gearChecklist.length === 0 ? (
+            <div className="empty-state">No hay ítems en la checklist de equipo (Comandancia → Equipo → Checklist de equipo personal).</div>
+          ) : (
+            <div className="gear-grid">
+              {gearChecklist.map((item) => (
+                <label key={item} className={`gear-check${requiredGear.includes(item) ? ' on' : ''}`}>
+                  <input
+                    type="checkbox"
+                    checked={requiredGear.includes(item)}
+                    onChange={(e) =>
+                      setRequiredGear((current) =>
+                        e.target.checked ? [...current, item] : current.filter((i) => i !== item),
+                      )
+                    }
+                  />
+                  <span>{item}</span>
+                </label>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="event-editor-section">

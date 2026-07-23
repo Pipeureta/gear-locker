@@ -193,6 +193,23 @@ create table if not exists public.event_attendance (
   primary key (event_id, player_id)
 );
 
+-- Qué ítems de la checklist de equipo pide comandancia para este evento.
+create table if not exists public.event_gear_requirements (
+  event_id uuid not null references public.events (id) on delete cascade,
+  item text not null,
+  primary key (event_id, item)
+);
+
+-- Quién de los que van tiene cada ítem requerido, para ESTE evento — no es
+-- lo mismo que players.gear (el equipo personal general del perfil).
+create table if not exists public.event_gear_status (
+  event_id uuid not null references public.events (id) on delete cascade,
+  player_id uuid not null references public.players (id) on delete cascade,
+  item text not null,
+  checked boolean not null default false,
+  primary key (event_id, player_id, item)
+);
+
 -- ---------------------------------------------------------------- admin
 
 create table if not exists public.admin_notes (
@@ -256,6 +273,8 @@ alter table public.event_assignments enable row level security;
 alter table public.event_files enable row level security;
 alter table public.comms_plan enable row level security;
 alter table public.event_attendance enable row level security;
+alter table public.event_gear_requirements enable row level security;
+alter table public.event_gear_status enable row level security;
 alter table public.admin_notes enable row level security;
 alter table public.team_inventory enable row level security;
 alter table public.procurements enable row level security;
@@ -365,6 +384,21 @@ create policy attendance_select on public.event_attendance for select to authent
 drop policy if exists attendance_admin on public.event_attendance;
 create policy attendance_admin on public.event_attendance for all to authenticated using (public.is_admin()) with check (public.is_admin());
 
+-- event_gear_requirements: solo comandancia decide qué se pide; todos lo ven.
+drop policy if exists gear_req_select on public.event_gear_requirements;
+create policy gear_req_select on public.event_gear_requirements for select to authenticated using (true);
+drop policy if exists gear_req_admin on public.event_gear_requirements;
+create policy gear_req_admin on public.event_gear_requirements for all to authenticated using (public.is_admin()) with check (public.is_admin());
+
+-- event_gear_status: todos ven el avance de todos (para el % de preparación
+-- del equipo), pero cada uno solo marca lo suyo.
+drop policy if exists gear_status_select on public.event_gear_status;
+create policy gear_status_select on public.event_gear_status for select to authenticated using (true);
+drop policy if exists gear_status_own on public.event_gear_status;
+create policy gear_status_own on public.event_gear_status for all to authenticated
+  using (player_id in (select id from public.players where user_id = auth.uid()) or public.is_admin())
+  with check (player_id in (select id from public.players where user_id = auth.uid()) or public.is_admin());
+
 -- admin_notes: SOLO admin (ni siquiera el jugador aludido las ve).
 drop policy if exists notes_admin on public.admin_notes;
 create policy notes_admin on public.admin_notes for all to authenticated using (public.is_admin()) with check (public.is_admin());
@@ -452,7 +486,8 @@ declare
 begin
   foreach t in array array[
     'players', 'events', 'event_rsvps', 'event_assignments', 'event_files',
-    'comms_plan', 'event_attendance', 'dues', 'payment_receipts',
+    'comms_plan', 'event_attendance', 'event_gear_requirements',
+    'event_gear_status', 'dues', 'payment_receipts',
     'admin_notes', 'announcements', 'team_inventory', 'procurements',
     'team_settings', 'registration_requests'
   ]

@@ -30,6 +30,7 @@ import {
   fetchEventData,
   removeFileRemote,
   setAttendanceRemote,
+  setGearStatusRemote,
   setRsvpRemote,
   updateEventRemote,
 } from './supabase/events';
@@ -43,6 +44,7 @@ import {
   setCollectionAdjustmentRemote,
   setDueAmountRemote,
   setDuePaidRemote,
+  updateUnpaidDuesAmount,
   uploadReceiptRemote,
 } from './supabase/finance';
 import {
@@ -102,6 +104,10 @@ interface StoreState {
   updateEvent: (id: string, event: Omit<GameEvent, 'id'>) => void;
   removeEvent: (id: string) => void;
   setEventAttended: (eventId: string, playerId: string, attended: boolean) => void;
+  // eventId -> playerId -> item -> ¿lo tiene? Checklist de equipo POR
+  // EVENTO — separado de players.gear (el equipo general del perfil).
+  eventGearStatus: Record<string, Record<string, Record<string, boolean>>>;
+  setEventGearItem: (eventId: string, playerId: string, item: string, checked: boolean) => void;
   adminNotes: Record<string, string>;
   setAdminNote: (playerId: string, note: string) => void;
   removeAdminNote: (playerId: string) => void;
@@ -168,6 +174,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [receipts, setReceipts] = useState<Receipt[]>([]);
   const [eventUploads, setEventUploads] = useState<UploadedEventFile[]>([]);
+  const [eventGearStatus, setEventGearStatus] = useState<Record<string, Record<string, Record<string, boolean>>>>({});
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [procurements, setProcurements] = useState<Procurement[]>([]);
 
@@ -218,6 +225,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setEvents(eventData.events);
     setRsvps(eventData.rsvps);
     setEventUploads(eventData.uploads);
+    setEventGearStatus(eventData.gearStatus);
     setDues(remoteDues);
     setReceipts(remoteReceipts);
     setAdminNotes(remoteNotes);
@@ -360,6 +368,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const supaId = players.find((p) => p.id === playerId)?.supaId;
       if (supaId) setAttendanceRemote(eventId, supaId, attended);
     },
+    eventGearStatus,
+    setEventGearItem: (eventId, playerId, item, checked) => {
+      setEventGearStatus((prev) => ({
+        ...prev,
+        [eventId]: { ...prev[eventId], [playerId]: { ...prev[eventId]?.[playerId], [item]: checked } },
+      }));
+      const supaId = players.find((p) => p.id === playerId)?.supaId;
+      if (supaId) setGearStatusRemote(eventId, supaId, item, checked);
+    },
     adminNotes,
     setAdminNote: (playerId, note) => {
       const trimmed = note.trim();
@@ -400,7 +417,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setDueAmount: (amount) => {
       const rounded = Math.max(0, Math.round(amount));
       setDueAmountState(rounded);
+      // Las cuotas ya pagadas quedan como historial; las pendientes de todo
+      // el equipo pasan a valer lo nuevo.
+      setDues((prev) => prev.map((d) => (d.paid ? d : { ...d, amount: rounded })));
       setDueAmountRemote(rounded);
+      updateUnpaidDuesAmount(rounded);
     },
 
     rsvps,

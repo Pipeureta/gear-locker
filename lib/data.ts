@@ -158,6 +158,10 @@ export interface GameEvent {
   comms: CommsChannel[];
   assignments: Assignment[];
   attended?: string[]; // ids de asistentes (eventos pasados)
+  // Ítems de la checklist de equipo personal que comandancia pide llevar a
+  // ESTE evento en particular — independiente de lo que cada uno ya tenga
+  // marcado en su perfil.
+  requiredGear: string[];
 }
 
 export interface InventoryItem {

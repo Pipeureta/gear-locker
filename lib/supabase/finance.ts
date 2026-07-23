@@ -114,6 +114,12 @@ export async function setDueAmountRemote(value: number): Promise<void> {
   await createClient().from('team_settings').update({ due_amount: value }).eq('id', 1);
 }
 
+// Al cambiar el valor de la cuota, se actualiza también la deuda pendiente
+// de todo el equipo (las cuotas ya pagadas no se tocan — son historial).
+export async function updateUnpaidDuesAmount(amount: number): Promise<void> {
+  await createClient().from('dues').update({ amount }).eq('paid', false);
+}
+
 export async function setCollectionAdjustmentRemote(value: number): Promise<void> {
   await createClient().from('team_settings').update({ collection_adjustment: value }).eq('id', 1);
 }

@@ -30,19 +30,23 @@ export interface FetchedEventData {
   events: GameEvent[];
   rsvps: Record<string, Record<string, RsvpStatus>>;
   uploads: UploadedEventFile[];
+  // eventId -> playerId -> item -> ¿lo tiene?
+  gearStatus: Record<string, Record<string, Record<string, boolean>>>;
 }
 
 export async function fetchEventData(players: Player[]): Promise<FetchedEventData> {
   const supabase = createClient();
   const supaToLocal = new Map(players.filter((p) => p.supaId).map((p) => [p.supaId!, p.id]));
 
-  const [eventsRes, assignmentsRes, commsRes, attendanceRes, rsvpsRes, filesRes] = await Promise.all([
+  const [eventsRes, assignmentsRes, commsRes, attendanceRes, rsvpsRes, filesRes, gearReqRes, gearStatusRes] = await Promise.all([
     supabase.from('events').select('*').order('date', { ascending: true }),
     supabase.from('event_assignments').select('event_id, player_id, squad, role'),
     supabase.from('comms_plan').select('*'),
     supabase.from('event_attendance').select('event_id, player_id'),
     supabase.from('event_rsvps').select('event_id, player_id, status'),
     supabase.from('event_files').select('*'),
+    supabase.from('event_gear_requirements').select('event_id, item'),
+    supabase.from('event_gear_status').select('event_id, player_id, item, checked'),
   ]);
 
   const eventRows = (eventsRes.data ?? []) as EventRow[];
@@ -74,6 +78,10 @@ export async function fetchEventData(players: Player[]): Promise<FetchedEventDat
       .map((a) => supaToLocal.get(a.player_id))
       .filter((id): id is string => Boolean(id));
 
+    const requiredGear = (gearReqRes.data ?? [])
+      .filter((g) => g.event_id === row.id)
+      .map((g) => g.item);
+
     return {
       id: row.id,
       name: row.name,
@@ -90,6 +98,7 @@ export async function fetchEventData(players: Player[]): Promise<FetchedEventDat
       comms,
       assignments,
       attended,
+      requiredGear,
     };
   });
 
@@ -110,7 +119,15 @@ export async function fetchEventData(players: Player[]): Promise<FetchedEventDat
     uploadedAt: f.created_at,
   }));
 
-  return { events, rsvps, uploads };
+  const gearStatus: Record<string, Record<string, Record<string, boolean>>> = {};
+  (gearStatusRes.data ?? []).forEach((g) => {
+    const localId = supaToLocal.get(g.player_id);
+    if (!localId) return;
+    gearStatus[g.event_id] = gearStatus[g.event_id] ?? {};
+    gearStatus[g.event_id][localId] = { ...gearStatus[g.event_id][localId], [g.item]: g.checked };
+  });
+
+  return { events, rsvps, uploads, gearStatus };
 }
 
 function toAssignmentRows(eventId: string, assignments: Assignment[], players: Player[]) {
@@ -136,6 +153,10 @@ function toCommsRows(eventId: string, comms: CommsChannel[]) {
     signal_code: c.signalCode ?? '1',
     notes: c.notes ?? null,
   }));
+}
+
+function toGearReqRows(eventId: string, requiredGear: string[]) {
+  return requiredGear.map((item) => ({ event_id: eventId, item }));
 }
 
 export async function createEventRemote(draft: Omit<GameEvent, 'id'>, players: Player[]): Promise<string | null> {
@@ -164,9 +185,11 @@ export async function createEventRemote(draft: Omit<GameEvent, 'id'>, players: P
   const id = data.id as string;
   const assignmentRows = toAssignmentRows(id, draft.assignments, players);
   const commsRows = toCommsRows(id, draft.comms);
+  const gearRows = toGearReqRows(id, draft.requiredGear);
   await Promise.all([
     assignmentRows.length ? supabase.from('event_assignments').insert(assignmentRows) : Promise.resolve(),
     commsRows.length ? supabase.from('comms_plan').insert(commsRows) : Promise.resolve(),
+    gearRows.length ? supabase.from('event_gear_requirements').insert(gearRows) : Promise.resolve(),
   ]);
   return id;
 }
@@ -192,12 +215,15 @@ export async function updateEventRemote(id: string, draft: Omit<GameEvent, 'id'>
   await Promise.all([
     supabase.from('event_assignments').delete().eq('event_id', id),
     supabase.from('comms_plan').delete().eq('event_id', id),
+    supabase.from('event_gear_requirements').delete().eq('event_id', id),
   ]);
   const assignmentRows = toAssignmentRows(id, draft.assignments, players);
   const commsRows = toCommsRows(id, draft.comms);
+  const gearRows = toGearReqRows(id, draft.requiredGear);
   await Promise.all([
     assignmentRows.length ? supabase.from('event_assignments').insert(assignmentRows) : Promise.resolve(),
     commsRows.length ? supabase.from('comms_plan').insert(commsRows) : Promise.resolve(),
+    gearRows.length ? supabase.from('event_gear_requirements').insert(gearRows) : Promise.resolve(),
   ]);
 }
 
@@ -207,6 +233,12 @@ export async function deleteEventRemote(id: string): Promise<void> {
 
 export async function setRsvpRemote(eventId: string, playerSupaId: string, status: RsvpStatus): Promise<void> {
   await createClient().from('event_rsvps').upsert({ event_id: eventId, player_id: playerSupaId, status });
+}
+
+export async function setGearStatusRemote(eventId: string, playerSupaId: string, item: string, checked: boolean): Promise<void> {
+  await createClient()
+    .from('event_gear_status')
+    .upsert({ event_id: eventId, player_id: playerSupaId, item, checked });
 }
 
 export async function setAttendanceRemote(eventId: string, playerSupaId: string, attended: boolean): Promise<void> {
