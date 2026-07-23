@@ -36,10 +36,12 @@ import {
 import {
   acceptReceiptRemote,
   fetchCollectionAdjustment,
+  fetchDueAmount,
   fetchDues,
   fetchReceipts,
   insertDuesRemote,
   setCollectionAdjustmentRemote,
+  setDueAmountRemote,
   setDuePaidRemote,
   uploadReceiptRemote,
 } from './supabase/finance';
@@ -108,6 +110,11 @@ interface StoreState {
   setDuePaid: (playerId: string, month: string, paid: boolean) => void;
   collectionAdjustment: number;
   setCollectionTotal: (total: number) => void;
+  // Monto de la cuota mensual. Al llegar un mes nuevo, las cuotas que se
+  // generan automáticamente usan este valor (el último que haya fijado
+  // comandancia), no un número fijo en el código.
+  dueAmount: number;
+  setDueAmount: (amount: number) => void;
 
   rsvps: Record<string, Record<string, RsvpStatus>>;
   setRsvp: (eventId: string, playerId: string, status: RsvpStatus) => void;
@@ -156,6 +163,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   // Ajuste manual sobre la suma de cuotas pagadas. Permite que comandancia
   // concilie el total real sin perder la actualización automática por cuotas.
   const [collectionAdjustment, setCollectionAdjustment] = useState(0);
+  const [dueAmount, setDueAmountState] = useState(DUE_AMOUNT);
   const [rsvps, setRsvps] = useState<Record<string, Record<string, RsvpStatus>>>({});
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [receipts, setReceipts] = useState<Receipt[]>([]);
@@ -195,6 +203,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       remoteInventory,
       remoteProcurements,
       remoteAdjustment,
+      remoteDueAmount,
     ] = await Promise.all([
       fetchEventData(merged),
       fetchDues(merged),
@@ -204,6 +213,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       fetchInventory(),
       fetchProcurements(),
       fetchCollectionAdjustment(),
+      fetchDueAmount(),
     ]);
     setEvents(eventData.events);
     setRsvps(eventData.rsvps);
@@ -215,6 +225,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setInventory(remoteInventory);
     setProcurements(remoteProcurements);
     setCollectionAdjustment(remoteAdjustment);
+    setDueAmountState(remoteDueAmount);
   }, []);
 
   useEffect(() => {
@@ -266,11 +277,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         const additions = players
           .filter((player) => player.status === 'activo' && player.joinedAt.slice(0, 7) <= month)
           .filter((player) => !current.some((due) => due.playerId === player.id && due.month === month))
-          .map((player) => ({ playerId: player.id, month, amount: DUE_AMOUNT, paid: false }));
+          .map((player) => ({ playerId: player.id, month, amount: dueAmount, paid: false }));
         if (additions.length) {
           insertDuesRemote(
             additions
-              .map((a) => ({ playerSupaId: players.find((p) => p.id === a.playerId)?.supaId, month, amount: DUE_AMOUNT }))
+              .map((a) => ({ playerSupaId: players.find((p) => p.id === a.playerId)?.supaId, month, amount: dueAmount }))
               .filter((r): r is { playerSupaId: string; month: string; amount: number } => Boolean(r.playerSupaId)),
           );
         }
@@ -284,7 +295,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       window.clearInterval(timer);
       window.removeEventListener('focus', ensureCurrentMonth);
     };
-  }, [session, supaPlayer?.is_admin, players]);
+  }, [session, supaPlayer?.is_admin, players, dueAmount]);
 
   const playerById = (id: string) => players.find((p) => p.id === id);
 
@@ -384,6 +395,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const adjustment = Math.max(0, Math.round(total)) - paidFromDues;
       setCollectionAdjustment(adjustment);
       setCollectionAdjustmentRemote(adjustment);
+    },
+    dueAmount,
+    setDueAmount: (amount) => {
+      const rounded = Math.max(0, Math.round(amount));
+      setDueAmountState(rounded);
+      setDueAmountRemote(rounded);
     },
 
     rsvps,

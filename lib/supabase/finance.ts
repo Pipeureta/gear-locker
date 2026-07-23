@@ -105,6 +105,15 @@ export async function fetchCollectionAdjustment(): Promise<number> {
   return data?.collection_adjustment ?? 0;
 }
 
+export async function fetchDueAmount(): Promise<number> {
+  const { data } = await createClient().from('team_settings').select('due_amount').eq('id', 1).maybeSingle();
+  return data?.due_amount ?? 10000;
+}
+
+export async function setDueAmountRemote(value: number): Promise<void> {
+  await createClient().from('team_settings').update({ due_amount: value }).eq('id', 1);
+}
+
 export async function setCollectionAdjustmentRemote(value: number): Promise<void> {
   await createClient().from('team_settings').update({ collection_adjustment: value }).eq('id', 1);
 }

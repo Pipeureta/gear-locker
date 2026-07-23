@@ -41,7 +41,7 @@ export default function ComandanciaPage() {
     announcements, addAnnouncement, updateAnnouncement, removeAnnouncement,
     receipts, acceptReceipt,
     addPlayer, updatePlayer, removePlayer, deletePlayer, adminNotes,
-    setDuePaid, collectionAdjustment, setCollectionTotal,
+    setDuePaid, collectionAdjustment, setCollectionTotal, dueAmount, setDueAmount,
     events, addEvent, updateEvent, removeEvent,
   } = useStore();
   const [newGearItem, setNewGearItem] = useState('');
@@ -253,6 +253,8 @@ export default function ComandanciaPage() {
   const [activeTab, setActiveTab] = useState<'resumen' | 'equipo' | 'eventos' | 'finanzas' | 'inventario'>('resumen');
   const [editingCollection, setEditingCollection] = useState(false);
   const [collectionDraft, setCollectionDraft] = useState('');
+  const [editingDueAmount, setEditingDueAmount] = useState(false);
+  const [dueAmountDraft, setDueAmountDraft] = useState('');
   const [financeYear, setFinanceYear] = useState(String(new Date().getFullYear()));
   const [financeMonth, setFinanceMonth] = useState(`${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`);
 
@@ -481,6 +483,56 @@ export default function ComandanciaPage() {
 
       {activeTab === 'finanzas' && (
         <>
+      {/* --------------------------------------------------- cuota mensual */}
+      <div className="section-title">Cuota mensual</div>
+      <div className="lat-panel">
+        <div className="panel-head">
+          <h3>Valor de la cuota</h3>
+          {!editingDueAmount && (
+            <button
+              className="lat-btn ghost sm"
+              onClick={() => {
+                setDueAmountDraft(String(dueAmount));
+                setEditingDueAmount(true);
+              }}
+            >
+              Editar
+            </button>
+          )}
+        </div>
+        <div className="big-num" style={{ fontSize: 26 }}>{fmtCLP(dueAmount)}</div>
+        <span className="tiny mut">
+          Se usa para las cuotas que se generan automáticamente cada mes. Cambiarlo no afecta los meses ya generados.
+        </span>
+        {editingDueAmount && (
+          <div className="collection-editor">
+            <input
+              className="lat-input"
+              type="number"
+              min="0"
+              step="500"
+              value={dueAmountDraft}
+              onChange={(e) => setDueAmountDraft(e.target.value)}
+              aria-label="Valor de la cuota mensual"
+              autoFocus
+            />
+            <button
+              className="lat-btn primary sm"
+              onClick={() => {
+                const next = Number(dueAmountDraft);
+                if (Number.isFinite(next) && next >= 0) {
+                  setDueAmount(next);
+                  setEditingDueAmount(false);
+                }
+              }}
+            >
+              Guardar
+            </button>
+            <button className="lat-btn ghost sm" onClick={() => setEditingDueAmount(false)}>Cancelar</button>
+          </div>
+        )}
+      </div>
+
       {/* --------------------------------------------------- comprobantes */}
       <div className="section-title">Comprobantes de pago</div>
       <div className="lat-panel">

@@ -229,14 +229,17 @@ create table if not exists public.announcements (
   created_at timestamptz not null default now()
 );
 
--- Ajustes del equipo — fila única. Hoy solo guarda el ajuste manual sobre
--- el total recaudado (permite a comandancia conciliar el total real sin
--- perder la suma automática por cuotas).
+-- Ajustes del equipo — fila única: el ajuste manual sobre el total
+-- recaudado (permite a comandancia conciliar el total real sin perder la
+-- suma automática por cuotas) y el valor vigente de la cuota mensual (las
+-- cuotas que se generan solas cada mes nuevo usan este valor).
 create table if not exists public.team_settings (
   id int primary key default 1,
-  collection_adjustment integer not null default 0
+  collection_adjustment integer not null default 0,
+  due_amount integer not null default 10000
 );
 insert into public.team_settings (id) values (1) on conflict (id) do nothing;
+alter table public.team_settings add column if not exists due_amount integer not null default 10000;
 
 -- =============================================================================
 -- RLS
